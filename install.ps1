@@ -1,6 +1,6 @@
 # AI Bench Spark installer (Windows 11 on ARM - RTX Spark; also works on Windows x64).
 #
-#   irm https://raw.githubusercontent.com/vietlanvietlan2000-crypto/AI-Bench-Spark/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/vietlanvietlan2000-crypto/AI-benchmark-ARM/main/install.ps1 | iex
 #
 # What it does / Viec no lam:
 #   [1/4] check Windows and CPU (ARM64 / x64)     kiem tra Windows va CPU
@@ -19,7 +19,7 @@
 
 & {
     $ErrorActionPreference = 'Stop'
-    $Repo   = 'vietlanvietlan2000-crypto/AI-Bench-Spark'
+    $Repo   = 'vietlanvietlan2000-crypto/AI-benchmark-ARM'
     $Branch = 'main'
     $Total  = 4
     $PyVer  = '3.12'

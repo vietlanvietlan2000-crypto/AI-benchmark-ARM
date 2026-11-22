@@ -21,7 +21,7 @@ Khác với AI Bench (LM Studio, Windows x64):
 Mở **PowerShell** và dán lệnh sau:
 
 ```powershell
-irm https://raw.githubusercontent.com/vietlanvietlan2000-crypto/AI-Bench-Spark/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/vietlanvietlan2000-crypto/AI-benchmark-ARM/main/install.ps1 | iex
 ```
 
 | Bước | Việc làm |
