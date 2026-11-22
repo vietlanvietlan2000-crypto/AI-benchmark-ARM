@@ -1,0 +1,2000 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Bench Spark · Tech by Lân</title>
+<link rel="icon" href="/logo-mark.png">
+<script>
+  // Đặt theme trước khi vẽ để không bị nháy màu.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("aibench.theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<style>
+  /* ===== Giao diện SÁNG: trắng – xanh dương, gọn và sạch ===== */
+  :root {
+    --bg: #eaf0fa; --bg2: #f8fafe; --card: rgba(255,255,255,.84); --field: #f3f6fb; --text: #131a26; --muted: #5d6779;
+    --line: #d5deec; --accent: #2563eb; --accent2: #7c3aed; --accent-text: #fff; --ok: #15803d; --bad: #b91c1c; --warn: #b45309;
+    --soft: #e4ecff; --head: rgba(255,255,255,.92); --shadow: 0 6px 24px rgba(30,60,120,.10); --glow: 0 0 0 0 transparent;
+    --grid: rgba(37,99,235,.07); --fx: 37,99,235; --fx2: 124,58,237; --orb1: rgba(37,99,235,.20); --orb2: rgba(124,58,237,.14);
+    --c0: #2563eb; --c1: #d97706; --c2: #dc2626; --c3: #059669; --radius: 12px;
+  }
+  /* ===== Giao diện TỐI: đen – neon xanh/tím kiểu gaming ===== */
+  :root[data-theme=dark] {
+    --bg: #05080f; --bg2: #0b1222; --card: rgba(12,18,32,.62); --field: #0a0f1c; --text: #e6edf7; --muted: #8b98ad;
+    --line: #1f2b42; --accent: #22d3ee; --accent2: #c084fc; --accent-text: #04121a; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24;
+    --soft: #10233a; --head: rgba(8,12,22,.92); --shadow: 0 8px 30px rgba(0,0,0,.5);
+    --glow: 0 0 26px rgba(34,211,238,.08);
+    --grid: rgba(34,211,238,.06); --fx: 34,211,238; --fx2: 192,132,252; --orb1: rgba(34,211,238,.16); --orb2: rgba(192,132,252,.15);
+    --c0: #22d3ee; --c1: #fbbf24; --c2: #fb7185; --c3: #4ade80;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 14px/1.5 "Segoe UI", system-ui, sans-serif; min-height: 100vh; }
+
+  /* ----- Nền công nghệ: lưới + quầng sáng trôi + mạng hạt (canvas) ----- */
+  .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+        background:
+          linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 44px 44px,
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 44px 44px,
+          radial-gradient(1200px 700px at 85% -10%, var(--bg2), transparent 70%), var(--bg); }
+  .orb { position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%; will-change: transform; }
+  .orb.a { left: -14vmax; top: -18vmax; background: radial-gradient(circle, var(--orb1), transparent 62%); animation: float1 26s ease-in-out infinite alternate; }
+  .orb.b { right: -16vmax; bottom: -20vmax; background: radial-gradient(circle, var(--orb2), transparent 62%); animation: float2 32s ease-in-out infinite alternate; }
+  @keyframes float1 { to { transform: translate(16vmax, 10vmax) scale(1.15); } }
+  @keyframes float2 { to { transform: translate(-14vmax, -12vmax) scale(1.2); } }
+  #fx { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* Lưới trôi chậm toàn màn hình */
+  .bg { animation: gridDrift 18s linear infinite; }
+  @keyframes gridDrift { to { background-position: 0 44px, 44px 0, 0 0, 0 0; } }
+  /* Sàn lưới phối cảnh kiểu cyberpunk, chạy về phía người xem */
+  .floorwrap { position: absolute; left: 0; right: 0; bottom: 0; height: 42vh; overflow: hidden;
+               perspective: 280px; perspective-origin: 50% 0; }
+  .floor { position: absolute; left: -100%; right: -100%; bottom: 0; height: 300%; transform-origin: 50% 100%;
+           transform: rotateX(75deg);
+           background:
+             linear-gradient(rgba(var(--fx),.55) 2px, transparent 2px) 0 0 / 70px 70px,
+             linear-gradient(90deg, rgba(var(--fx2),.45) 2px, transparent 2px) 0 0 / 70px 70px;
+           -webkit-mask-image: linear-gradient(to bottom, transparent, #000 60%); mask-image: linear-gradient(to bottom, transparent, #000 60%);
+           opacity: .6; animation: floorRun 1.6s linear infinite; }
+  @keyframes floorRun { to { background-position: 0 70px, 0 70px; } }
+  .horizon { position: absolute; left: 0; right: 0; bottom: 42vh; height: 2px; opacity: .7;
+             background: linear-gradient(90deg, transparent, rgba(var(--fx),.9), rgba(var(--fx2),.9), transparent);
+             box-shadow: 0 0 18px 3px rgba(var(--fx),.35); animation: horizonPulse 4s ease-in-out infinite; }
+  @keyframes horizonPulse { 50% { opacity: .3; } }
+  /* Vệt quét sáng chạy từ trên xuống */
+  .scan { position: absolute; left: 0; right: 0; top: -20vh; height: 18vh;
+          background: linear-gradient(to bottom, transparent, rgba(var(--fx),.10) 80%, rgba(var(--fx),.45) 99%, transparent);
+          animation: scanDown 7s cubic-bezier(.45,0,.55,1) infinite; }
+  @keyframes scanDown { to { transform: translateY(140vh); } }
+  /* Vạch quét kiểu màn hình CRT (chỉ giao diện tối) */
+  :root[data-theme=dark] .bg::after { content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,.025) 0 1px, transparent 1px 3px); }
+  :root:not([data-theme=dark]) .floor { opacity: .3; }
+  .fx-off .orb, .fx-off .bg, .fx-off .floor, .fx-off .horizon, .fx-off .scan { animation: none; }
+  .fx-off .scan { display: none; }
+  @media (prefers-reduced-motion: reduce) { .orb, .bg, .floor, .horizon, .scan { animation: none; } .scan { display: none; } }
+  header, main { position: relative; z-index: 1; }
+
+  header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 8px 24px;
+           background: var(--head); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); position: sticky; top: 0; z-index: 5; }
+  :root[data-theme=dark] header { border-image: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent) 1; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+  .brand img { height: 54px; width: auto; display: block; cursor: zoom-in; transition: transform .25s;
+               filter: drop-shadow(0 3px 8px rgba(0,0,0,.25)); }
+  .brand img:hover { transform: scale(1.08) rotate(-2deg); }
+  .brand .name { font: italic 900 21px/1 "Segoe UI", "Arial Black", system-ui, sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+  :root[data-theme=dark] .brand .name { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text;
+               background-clip: text; color: transparent; }
+  .brand .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .brand .sub b { color: var(--accent); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); } .dot.bad { background: var(--bad); }
+  .eng { padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
+  .eng.gpu { color: var(--ok); } .eng.spill { color: var(--warn); } .eng.cpu { color: var(--bad); }
+  .eng.idle, .eng.unknown { color: var(--muted); font-weight: 400; }
+  .warnbox { border-left: 4px solid var(--warn); }
+  .warnbox.cpu { border-left-color: var(--bad); }
+  .warnbox b.t { display: block; margin-bottom: 6px; }
+  .warnbox ul { margin: 6px 0 0; padding-left: 18px; }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 7px 10px; font-weight: 700; font-size: 12px; background: transparent; color: var(--muted); box-shadow: none; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .icon { width: 34px; height: 34px; padding: 0; font-size: 16px; line-height: 1; border-radius: 8px; }
+  .icon.off { opacity: .45; }
+
+  main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; padding: 16px 24px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); padding: 16px; } header { padding: 8px 16px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+          box-shadow: var(--shadow), var(--glow); position: relative; backdrop-filter: blur(1.5px); }
+  /* Viền neon chạy quanh thẻ (giao diện tối) */
+  :root[data-theme=dark] .card::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(90deg, transparent 20%, rgba(var(--fx),.95), rgba(var(--fx2),.95), transparent 80%) 0 0 / 300% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); opacity: .7; animation: borderFlow 7s linear infinite; }
+  @keyframes borderFlow { to { background-position: 300% 0; } }
+  .fx-off .card::before { animation: none; opacity: .25; }
+  @media (prefers-reduced-motion: reduce) { .card::before { animation: none; } }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  :root[data-theme=dark] h2 { color: var(--accent); letter-spacing: .03em; text-transform: uppercase; font-size: 13px; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  .help { color: var(--muted); font-size: 12px; font-weight: 400; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--field); color: var(--text); font: inherit; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  button { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card);
+           color: var(--text); font: inherit; cursor: pointer; transition: border-color .15s, transform .1s; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+  :root[data-theme=dark] button.primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); border-color: transparent;
+           box-shadow: 0 0 18px rgba(34,211,238,.35); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .quick button { flex: 1; padding: 6px 8px; font-size: 13px; white-space: nowrap; }
+  .row { display: flex; gap: 8px; margin-top: 16px; }
+  .row .primary { flex: 1; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .4s; }
+  pre { margin: 0; max-height: 220px; overflow: auto; background: var(--field); border-radius: 6px; padding: 10px;
+        font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
+  .tile { background: var(--field); border: 1px solid transparent; border-radius: 8px; padding: 10px 12px; }
+  .tile:first-child { background: var(--soft); border-color: var(--accent); }
+  .tile .l { color: var(--muted); font-size: 12px; }
+  .tile .v { font-size: 22px; font-weight: 700; }
+  :root[data-theme=dark] .tile .v { color: var(--accent); text-shadow: 0 0 14px rgba(34,211,238,.35); }
+  .tile .u { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; text-shadow: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  tr.click { cursor: pointer; } tr.click:hover { background: var(--field); } tr.sel { background: var(--soft); }
+  .muted { color: var(--muted); } .err { color: var(--bad); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; }
+  svg { width: 100%; height: 180px; display: block; background: var(--field); border-radius: 6px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .shot { border: 2px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--field); }
+  .shot.pending { border-color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { border-color: var(--line); } }
+  .filebox { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px; padding: 10px 12px;
+             background: var(--soft); border-radius: 8px; word-break: break-all; }
+  .shot img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #fff; cursor: zoom-in; }
+  .shot .cap { padding: 8px 10px; font-size: 12.5px; }
+  .shot .cap b { display: block; margin-bottom: 4px; }
+  .chk.ok { color: var(--ok); } .chk.bad { color: var(--bad); font-weight: 600; }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center;
+          justify-content: center; cursor: zoom-out; z-index: 10; }
+  #zoom.on { display: flex; }
+  #zoom img { max-width: 94vw; max-height: 94vh; background: #fff; border-radius: 8px; }
+  [hidden] { display: none !important; }
+  /* ----- So sánh các lần chạy ----- */
+  .cmpbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: -4px 0 10px; }
+  .cmpbar .muted { margin-right: auto; font-size: 12.5px; }
+  /* Thanh lọc tự xuống dòng theo độ rộng thẻ: ô tìm rộng nhất, các ô chọn chia đều */
+  .hfilter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .hfilter[hidden] { display: none; }
+  .hfilter input, .hfilter select { margin: 0; min-width: 0; width: auto; }
+  .hfilter #hfText { flex: 2 1 240px; }
+  .hfilter select, .hfilter #hfVga { flex: 1 1 160px; }
+  .hfilter button { white-space: nowrap; flex: 0 0 auto; }
+  .pager { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-top: 12px; font-size: 12.5px; }
+  .pager .pages { display: flex; gap: 4px; align-items: center; }
+  .pager button { min-width: 32px; padding: 4px 9px; font-size: 12.5px; }
+  .pager button.cur { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 12px rgba(var(--fx),.45); }
+  .pager .gap { padding: 0 4px; color: var(--muted); }
+  .pager .psize { display: inline-flex; gap: 6px; align-items: center; margin: 0; color: var(--muted); }
+  .pager select { width: auto; padding: 3px 6px; }
+  select:disabled { opacity: .5; cursor: not-allowed; }
+  .fit { margin-top: 6px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); border-left: 4px solid var(--muted);
+         background: var(--field); font-size: 12.5px; line-height: 1.45; }
+  .fit b { display: block; }
+  .fit.ok { border-left-color: var(--ok); } .fit.ok b { color: var(--ok); }
+  .fit.tight { border-left-color: var(--warn); } .fit.tight b { color: var(--warn); }
+  .fit.warn { border-left-color: var(--warn); } .fit.warn b { color: var(--warn); }
+  .fit.bad { border-left-color: var(--bad); } .fit.bad b { color: var(--bad); }
+  .fit .muted { margin-top: 3px; font-size: 11.5px; }
+  #liveCard { border-color: var(--accent); }
+  #liveCard .last { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #live { max-height: 62vh; overflow: auto; }
+  .q { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent);
+       font-size: 11px; font-weight: 700; letter-spacing: .02em; vertical-align: middle; white-space: nowrap; }
+  .pick { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; margin: 0; }
+  .pick input { width: 16px; height: 16px; cursor: pointer; }
+  .pick .ord { display: inline-block; min-width: 14px; font-size: 11px; font-weight: 700; color: var(--accent); }
+  #compare { position: relative; z-index: 1; padding: 16px 24px; max-width: 1500px; margin: 0 auto; }
+  .cmphead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+  .cmphead h2 { margin: 0; font-size: 17px; }
+  /* Cột cố định: cột tiêu chí 180px, các cột kết quả chia đều nhau dù chọn 2, 3, 4 hay 5 lần chạy */
+  table.cmp { table-layout: fixed; }
+  table.cmp th, table.cmp td { white-space: normal; vertical-align: top; overflow-wrap: anywhere; }
+  table.cmp th:first-child, table.cmp td:first-child { font-weight: 600; color: var(--text); }
+  table.cmp th .eng { display: inline-block; max-width: 100%; }
+  table.cmp th.base, table.cmp td.base { background: var(--soft); }
+  table.cmp th { color: var(--text); font-weight: 400; }
+  table.cmp th .hd { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  table.cmp th .hd button { padding: 3px 8px; font-size: 12px; }
+  table.cmp th .hd .x { margin-left: auto; }
+  table.cmp th .m { font-weight: 700; font-size: 14px; word-break: break-word; }
+  table.cmp .tag { background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+  table.cmp tr.grp td { background: var(--field); color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 12.5px; }
+  table.cmp tr.grp label { display: inline-flex; gap: 6px; align-items: center; margin: 0 0 0 14px; text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }
+  table.cmp tr.grp input { width: 90px; padding: 3px 6px; }
+  .cv { font-size: 17px; font-weight: 700; } .cv .u { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .cbar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 5px 0; }
+  .cbar > div { height: 100%; background: var(--muted); }
+  .cbar.base > div { background: var(--accent); } .cbar.good > div { background: var(--ok); } .cbar.bad > div { background: var(--bad); }
+  .cp { font-size: 12.5px; color: var(--muted); } .cp b { font-size: 14px; color: var(--text); margin-right: 4px; }
+  .cp.good span { color: var(--ok); font-weight: 600; } .cp.bad span { color: var(--bad); font-weight: 600; }
+  .cost { margin-top: 4px; font-size: 12.5px; color: var(--warn); font-weight: 600; }
+  /* ----- Chatbot ----- */
+  #chatView { position: relative; z-index: 1; display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; padding: 16px 24px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 900px) { #chatView { grid-template-columns: minmax(0, 1fr); padding: 16px; } }
+  /* Gợi ý model theo VRAM */
+  .sugg { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--soft); font-size: 13px; }
+  .sugg summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+  .sugg[open] summary { margin-bottom: 6px; }
+  .sgrow { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }
+  .sgrow span { color: var(--muted); min-width: 92px; }
+  .sgrow b { flex: 1; min-width: 0; word-break: break-all; }
+  .sgrow em { font-style: normal; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .sgtip { margin-top: 6px; color: var(--warn); font-size: 12.5px; }
+  .sgsame { margin-top: 6px; color: var(--ok); font-weight: 600; }
+  .sugg button { margin-top: 8px; width: 100%; }
+  .chatcard { display: flex; gap: 14px; height: calc(100vh - 120px); min-height: 420px; }
+  .chatmain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #chatLog { flex: 1; overflow: auto; padding-right: 4px; }
+  /* Lịch sử hội thoại */
+  .convpane { width: 250px; flex: 0 0 250px; display: flex; flex-direction: column; gap: 8px; padding-right: 14px; border-right: 1px solid var(--line); min-height: 0; }
+  .chatcard.noconv .convpane { display: none; }
+  .convhead { display: flex; align-items: center; gap: 8px; }
+  .convhead b { flex: 1; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+  .convhead button { padding: 5px 10px; font-size: 12.5px; }
+  #convSearch { margin: 0; padding: 6px 9px; font-size: 13px; }
+  #convList { flex: 1; overflow: auto; margin-right: -6px; padding-right: 6px; }
+  .convgrp { margin: 10px 2px 4px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .conv { position: relative; padding: 7px 9px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+  .conv:hover { background: var(--field); }
+  .conv.on { background: var(--soft); border-color: var(--accent); }
+  .conv .ct { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 46px; }
+  .conv .cm { font-size: 11.5px; color: var(--muted); }
+  .conv .ca { position: absolute; right: 4px; top: 6px; display: none; gap: 2px; }
+  .conv:hover .ca, .conv.on .ca { display: flex; }
+  .conv .ca button { padding: 1px 5px; font-size: 12px; border: 0; background: transparent; color: var(--muted); }
+  .conv .ca button:hover { color: var(--accent); }
+  .conv .ca button.del:hover { color: var(--bad); }
+  .convempty { color: var(--muted); font-size: 12.5px; padding: 8px 2px; }
+  .chathead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 30px; }
+  .chathead b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+  .chathead .icon { padding: 3px 9px; }
+  @media (max-width: 1100px) {
+    .chatcard { flex-direction: column; }
+    .convpane { width: auto; flex: 0 0 auto; max-height: 220px; padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+  .msg { max-width: 86%; margin: 0 0 12px; padding: 10px 13px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { margin-left: auto; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 3px; }
+  .msg.bot { background: var(--field); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+  .msg .st { color: var(--muted); font-style: italic; }
+  .msg .meta { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); white-space: normal; }
+  .src { display: inline-block; margin: 3px 6px 0 0; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent);
+         background: transparent; font-size: 12px; cursor: pointer; }
+  .msg.bot { max-width: 94%; }
+  .cite { display: inline-block; min-width: 18px; margin: 0 1px; padding: 0 5px; border-radius: 999px; border: 1px solid var(--accent); background: var(--soft);
+          color: var(--accent); font-size: 11px; font-weight: 700; line-height: 16px; vertical-align: 2px; cursor: pointer; }
+  .srcrow { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; cursor: pointer; }
+  .srcrow:hover .where { color: var(--accent); text-decoration: underline; }
+  .srcrow .where { word-break: break-word; }
+  .msg table { margin: 8px 0 4px; background: var(--card); border-radius: 6px; white-space: normal; }
+  .msg table td, .msg table th { white-space: normal; }
+  .msg pre { white-space: pre-wrap; max-height: none; }
+  .blockbar { display: flex; gap: 8px; margin: 2px 0 10px; }
+  .blockbar button { padding: 4px 10px; font-size: 12px; }
+  .chartbox { margin: 8px 0 4px; padding: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; white-space: normal; }
+  .chartbox svg { height: auto; background: transparent; }
+  .chartbox .ct { font-weight: 700; text-align: center; margin-bottom: 4px; }
+  #viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #viewer .box { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); width: min(1100px, 100%); height: 100%; max-height: 100%;
+                 display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  #viewer .vh { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  #viewer .vh b { flex: 1; word-break: break-word; }
+  #viewerBody { overflow: auto; padding: 14px 18px; flex: 1; }
+  .vtabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .vtabs button { border: 0; border-radius: 0; padding: 5px 12px; font-size: 12.5px; }
+  .vtabs button.on { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+  /* Trang gốc: ảnh trang + khung vàng ở chỗ AI đã dùng */
+  .pgbar { position: sticky; top: -14px; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+           margin: -14px -18px 12px; padding: 8px 18px; background: var(--bg2); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .pgbar button { padding: 3px 10px; font-size: 12.5px; }
+  .pgbar input { width: 64px; padding: 3px 6px; margin: 0; }
+  .pgbar .hitpg { border-color: var(--warn); color: var(--warn); }
+  .pgbar .hitpg.on { background: var(--warn); color: #131a26; font-weight: 700; }
+  .pgnote { width: 100%; }
+  .pgwrap { position: relative; margin: 0 auto; max-width: 900px; background: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); }
+  .pgwrap img { display: block; width: 100%; height: auto; }
+  .pgwrap .mk { position: absolute; background: rgba(255, 214, 0, .5); mix-blend-mode: multiply; pointer-events: none;
+                animation: mkPulse 1.6s ease-out 2; }
+  @keyframes mkPulse { 0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, .8); } 100% { box-shadow: 0 0 0 12px rgba(250, 204, 21, 0); } }
+  .vloc { margin: 14px 0 4px; font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; }
+  .vchunk { white-space: pre-wrap; word-break: break-word; padding: 4px 8px; border-left: 3px solid transparent; border-radius: 4px; }
+  .vchunk.hit { border-left-color: var(--warn); background: rgba(250, 204, 21, .16); }
+  .vchunk.hit.main { outline: 2px solid var(--warn); }
+  .vchunk mark { background: rgba(250, 204, 21, .75); color: #131a26; border-radius: 2px; padding: 0 1px; }
+  .chatin { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
+  .chatin textarea { flex: 1; resize: vertical; min-height: 44px; }
+  .steps { display: flex; gap: 4px; margin-top: 10px; font-size: 11.5px; }
+  .steps span { flex: 1; text-align: center; padding: 4px 2px; border-radius: 6px; background: var(--field); color: var(--muted); border: 1px solid var(--line); }
+  .steps span.on { border-color: var(--accent); color: var(--accent); font-weight: 700; background: var(--soft); }
+  .steps span.ok { color: var(--ok); }
+  .vloc .ocr { margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; font-size: 10px; }
+  .tree { margin-top: 10px; font-size: 12.5px; max-height: 38vh; overflow: auto; }
+  .tree .dir { font-weight: 700; margin-top: 6px; }
+  .tree .f { display: flex; gap: 6px; cursor: pointer; padding: 1px 0; }
+  .tree .f:hover { color: var(--accent); }
+  .tree .f .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree .ok { color: var(--ok); } .tree .new { color: var(--warn); } .tree .bad { color: var(--bad); }
+  h3 { font-size: 13px; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="orb a"></div><div class="orb b"></div><div class="floorwrap"><div class="floor"></div></div><div class="horizon"></div><div class="scan"></div><canvas id="fx"></canvas></div>
+<header>
+  <div class="brand">
+    <img id="logo" src="/logo-mark.png" alt="Tech by Lân" data-full="/logo.png">
+    <div><div class="name">Tech by Lân</div><div class="sub"><b>AI Bench Spark</b> · <span data-i18n="tagline"></span></div></div>
+  </div>
+  <div class="seg" role="group"><button id="viewBench">Benchmark</button><button id="viewChat">Chatbot</button></div>
+  <span class="pill"><span class="dot" id="lmDot"></span><span id="lmText">Ollama…</span>
+    <button id="lmStart" hidden data-i18n="lmStartBtn"></button></span>
+  <span class="pill" id="gpuText">GPU…</span>
+  <span class="eng unknown" id="engText" hidden></span>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="Language"><button id="langVi">VI</button><button id="langEn">EN</button></div>
+    <button class="icon" id="fxBtn">✨</button>
+    <button class="icon" id="themeBtn"></button>
+  </div>
+</header>
+<main>
+  <div>
+    <div class="card warnbox" id="engWarn" hidden></div>
+    <div class="card">
+      <h2 data-i18n="pickTest"></h2>
+      <label for="mdir" style="margin-top:0" data-i18n="mdirLabel"></label>
+      <select id="mdir"></select>
+      <div class="help" id="mdirHelp" style="margin:6px 0 12px"></div>
+      <select id="module"></select>
+      <div class="help" id="moduleDesc" style="margin-top:6px"></div>
+      <form id="form"></form>
+      <div class="row">
+        <button class="primary" id="run" data-i18n="run"></button>
+        <button id="cancel" hidden data-i18n="cancel"></button>
+      </div>
+    </div>
+    <div class="card" id="jobCard" hidden>
+      <h2><span data-i18n="progress"></span> <span class="muted" id="jobPct"></span></h2>
+      <div class="bar"><div id="jobBar"></div></div>
+      <pre id="jobLog"></pre>
+    </div>
+  </div>
+  <div>
+    <div class="card" id="liveCard" hidden>
+      <h2><span id="liveTitle"></span> <span class="muted" id="livePct"></span></h2>
+      <div class="bar"><div id="liveBar"></div></div>
+      <div class="last" id="liveLast"></div>
+      <div id="live"></div>
+    </div>
+    <div class="card" id="resultCard">
+      <h2 id="resultTitle"></h2>
+      <div id="result" class="muted"></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="history"></h2>
+      <div class="cmpbar"><span class="muted" data-i18n="cmpHint"></span>
+        <button id="cmpClear" hidden data-i18n="cmpClear"></button><button class="primary" id="cmpGo" disabled></button></div>
+      <div class="hfilter" id="histFilter" hidden>
+        <input type="search" id="hfText" data-i18n-ph="hfText">
+        <select id="hfTest"></select>
+        <select id="hfModel"></select>
+        <input type="search" id="hfVga" data-i18n-ph="hfVga" list="hfVgaList"><datalist id="hfVgaList"></datalist>
+        <button id="hfClear" hidden data-i18n="hfClear"></button>
+      </div>
+      <div id="history"></div>
+    </div>
+  </div>
+</main>
+<section id="compare" hidden></section>
+<section id="chatView" hidden>
+  <div>
+    <div class="card">
+      <h2 data-i18n="chatSetup"></h2>
+      <details class="sugg" id="chatSugg" hidden></details>
+      <label for="chatModel" style="margin-top:0" data-i18n="chatModel"></label>
+      <select id="chatModel"></select>
+      <div class="help" id="loadedInfo" style="margin-top:6px"></div>
+      <button id="unloadBtn" style="margin-top:6px;width:100%" data-i18n="unloadBtn"></button>
+      <label class="check"><input type="checkbox" id="chatDocs" checked> <span data-i18n="chatUseDocs"></span></label>
+      <div class="help" data-i18n="chatUseDocsHelp"></div>
+      <label class="check"><input type="checkbox" id="chatWeb"> <span data-i18n="chatUseWeb"></span></label>
+      <div class="help" data-i18n="chatUseWebHelp"></div>
+      <label for="chatEmbed" data-i18n="chatEmbed"></label>
+      <select id="chatEmbed"></select>
+      <div class="help" data-i18n="chatEmbedHelp"></div>
+      <div class="fit warn" id="embedWarn" hidden></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="docsTitle"></h2>
+      <div class="help" id="docsDir" style="word-break:break-all"></div>
+      <label for="chatOcr" data-i18n="ocrLabel"></label>
+      <select id="chatOcr"></select>
+      <div class="help" data-i18n="ocrHelp"></div>
+      <div class="row"><button id="docsOpen" data-i18n="docsOpen"></button><button class="primary" id="docsIndex" data-i18n="docsIndex"></button>
+        <button id="docsCancel" hidden data-i18n="docsCancel"></button></div>
+      <div class="steps" id="docsSteps" hidden></div>
+      <div class="bar" id="docsBarWrap" hidden><div id="docsBar"></div></div>
+      <div class="help" id="docsStatus" style="margin-top:8px"></div>
+      <div class="tree" id="docsTree"></div>
+    </div>
+  </div>
+  <div class="card chatcard">
+    <aside class="convpane" id="convPane">
+      <div class="convhead"><b data-i18n="convTitle"></b><button class="primary" id="chatNew" data-i18n="chatNew"></button></div>
+      <input type="search" id="convSearch" data-i18n-ph="convSearch">
+      <div id="convList"></div>
+    </aside>
+    <div class="chatmain">
+      <div class="chathead"><button class="icon" id="convToggle" data-i18n-title="convToggle">☰</button><b id="convName"></b></div>
+      <div id="chatLog"></div>
+      <div class="chatin">
+        <textarea id="chatInput" rows="2"></textarea>
+        <button class="primary" id="chatSend" data-i18n="chatSend"></button>
+      </div>
+    </div>
+  </div>
+</section>
+<div id="zoom"><img alt=""></div>
+<div id="viewer" hidden><div class="box">
+  <div class="vh"><b id="viewerTitle"></b>
+    <span class="vtabs" id="viewerTabs" hidden><button data-vt="page" data-i18n="vtPage"></button><button data-vt="text" data-i18n="vtText"></button></span>
+    <button id="viewerOpen"></button><button id="viewerClose">✕</button></div>
+  <div id="viewerBody"></div>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const store = { get: k => { try { return localStorage.getItem("aibench." + k); } catch (e) { return null; } },
+                set: (k, v) => { try { localStorage.setItem("aibench." + k, v); } catch (e) {} } };
+let lang = store.get("lang") === "en" ? "en" : "vi";
+
+// ----- Chữ của giao diện (2 ngôn ngữ) -----
+const T = {
+  vi: {
+    tagline: "Benchmark GPU chạy AI", pickTest: "Chọn bài test", run: "Chạy", cancel: "Huỷ", progress: "Tiến trình",
+    result: "Kết quả", history: "Lịch sử", lmStartBtn: "Khởi động Ollama",
+    noResult: "Chưa có kết quả. Chọn model rồi bấm Chạy, hoặc chọn một lần chạy trong lịch sử.",
+    lmUp: n => `Ollama đang chạy (${n} model)`, lmDown: "Ollama chưa chạy", lost: "Mất kết nối AI Bench Spark",
+    lmStarting: "Đang khởi động Ollama…", gpuNone: "Không tìm thấy GPU NVIDIA (nvidia-smi)", memShared: "bộ nhớ chung", gpuPower: w => `đang dùng ${w} W`,
+    loaded: " (đã nạp)", vision: " · thị giác", noModel: "(chưa có model – tải bằng lệnh: ollama pull gemma3:4b)",
+    runN: (n, u) => `Chạy ${n} ${u}`, running: "Đang chạy…",
+    liveTitle: "AI đang xem (ảnh mới nhất ở đầu) · bấm vào ảnh để phóng to",
+    galleryTitle: "Ảnh và kết quả AI đọc được · bấm vào ảnh để phóng to", answer: "Trả lời", openFile: "Mở file",
+    pendingImg: "AI đang xem ảnh này…", expected: "đáp án", aiSaid: "AI trả lời", peak: "cao nhất",
+    chartNote: s => `Mỗi đường co theo giá trị cao nhất của nó · trục ngang ${s} giây`, ranFor: s => `chạy ${s} giây`,
+    histEmpty: "Chưa có lần chạy nào.", histShow: (a, b, n) => `Hiển thị ${a}–${b} / ${n} lần chạy`, histPer: "Số dòng mỗi trang",
+    hfText: "🔍 Tìm: model, bài test, GPU, kết quả…", hfVga: "🖥 VGA (vd: 4080)", hfTest: "Tất cả bài test", hfModel: "Tất cả model",
+    hfClear: "✕ Xóa lọc", hfNone: "Không có lần chạy nào khớp bộ lọc.", histShowF: (a, b, n, all) => `Hiển thị ${a}–${b} / ${n} lần chạy khớp (trong ${all})`, cols: ["Thời gian", "Bài test", "Model", "GPU", "Kết quả chính"],
+    toDark: "Chuyển sang giao diện tối", toLight: "Chuyển sang giao diện sáng",
+    engGpu: e => `⚡ Chạy bằng GPU (Ollama)`, engSpill: "⚠ GPU bị tràn VRAM", engCpu: "🐢 Chạy bằng CPU",
+    engIdle: "Chưa nạp model", engLayers: n => `${n} lớp trên GPU`, engAll: "toàn bộ lớp trên GPU", engCtx: n => `ngữ cảnh ${n}`,
+    engShared: g => `${g} GB chạy bằng CPU`, engRan: "Model chạy bằng",
+    liveRun: "⏳ Đang chạy", liveHint: "Bạn vẫn xem được các kết quả cũ ở bên dưới trong lúc bài test chạy.",
+    fitOkT: "✓ Phù hợp với phần cứng", fitTightT: "△ Vừa sát VRAM", fitWarnT: "⚠ Không phù hợp – sẽ chạy rất chậm", fitBadT: "✗ Quá lớn so với máy này",
+    fitOk: (need, vram) => `Cần khoảng ${need} GB, GPU có ${vram} GB VRAM.`,
+    fitTight: (need, vram) => `Cần khoảng ${need} GB trên ${vram} GB VRAM. Hãy đóng các ứng dụng đang dùng GPU trước khi chạy.`,
+    fitCtx: (need, vram, ctx, max) => `Model vừa VRAM, nhưng đang nạp với ngữ cảnh ${ctx} token nên cần khoảng ${need} GB, vượt ${vram} GB VRAM. Phần dư tràn sang RAM và tốc độ giảm rất mạnh. ` +
+      `Hãy gỡ các model đã nạp rồi chạy lại (app nạp model với ngữ cảnh 8.192 token), hoặc chọn model nhỏ hơn.`,
+    fitOver: (need, vram) => `Riêng model đã cần khoảng ${need} GB, GPU chỉ có ${vram} GB VRAM. Phần dư phải chạy bằng RAM/CPU nên rất chậm. Nên chọn model hoặc mức nén nhỏ hơn.`,
+    fitNo: (need, vram, ram) => `Cần khoảng ${need} GB, vượt cả VRAM (${vram} GB) lẫn RAM (${ram} GB). Nhiều khả năng không nạp được.`,
+    fitSpill: g => `Đo thực tế: model này đang nạp và đã tràn ${g} GB từ VRAM sang RAM. Kết quả test sẽ thấp hơn nhiều so với khả năng của GPU. Gỡ bớt model đang nạp hoặc chọn model nhỏ hơn.`,
+    fitCpu: "Đo thực tế: model này đang nạp và chạy bằng CPU, không dùng GPU.",
+    fitCtxTip: max => `Ngữ cảnh tối đa còn vừa bộ nhớ: khoảng ${max} token.`,
+    fitEst: size => `Ước lượng từ dung lượng file model (${size} GB), sai số có thể vài GB.`,
+    unloadBtn: "Gỡ các model đã nạp", unloading: "Đang gỡ model…", loadedNone: "Chưa có model nào nạp trong bộ nhớ.",
+    loadedList: (list, vram) => `Đang nạp: ${list}${vram ? ` · VRAM đang dùng ${vram}` : ""}`,
+    unloadHint: "Model trả lời sẽ tự nạp lại khi bạn gửi câu hỏi.",
+    chatUseWeb: "Tìm kiếm qua internet",
+    chatUseWebHelp: "Bật: câu hỏi của bạn được gửi tới máy tìm kiếm trên internet, AI đọc vài trang kết quả đầu rồi trả lời kèm link nguồn.",
+    srcCited: "Nguồn đã trích dẫn (bấm để xem đoạn được tô sáng):", srcRead: "Nguồn AI đã đọc:",
+    locPage: n => `trang ${n}`, locSheet: n => `sheet ${n}`, locSec: n => `mục ${n}`, locPart: n => `đoạn ${n}`,
+    toExcel: "Xuất Excel", toExcelChart: "Xuất Excel (kèm biểu đồ)", chartDrawing: "Đang vẽ biểu đồ…", chartBad: "Không vẽ được biểu đồ (dữ liệu AI trả về không hợp lệ).",
+    viewOpenFile: "Mở file gốc", viewOpenWeb: "Mở trang web", viewLoading: "Đang mở…",
+    vtPage: "📄 Trang gốc", vtText: "📝 Văn bản", pgOf: n => `/ ${n}`, pgPage: "Trang", pgHits: "Trang AI đã dùng:",
+    pgNoMark: "Không định vị được dòng khớp trên trang này. Xem tab 📝 Văn bản để thấy đoạn được trích dẫn.",
+    pgNoBox: "Model OCR đã dùng không trả về vị trí chữ nên không tô được trên ảnh. Xem tab 📝 Văn bản.",
+    pgOcrNote: "Trang scan: vị trí tô vàng ước lượng theo khối chữ mà model OCR nhận ra.",
+    pgMarks: n => `${n} chỗ được tô vàng`,
+    chatSetup: "Chatbot", chatModel: "Model trả lời", chatUseDocs: "Tra cứu tài liệu trước khi trả lời",
+    chatUseDocsHelp: "Bật: AI chỉ trả lời theo tài liệu trong thư mục bên dưới. Tắt: chat tự do với model.",
+    sgOk: "  ✓ vừa máy", sgTight: "  △ vừa sát VRAM", sgNo: "  ✗ quá lớn với máy này",
+    sgTitle: v => `💡 Gợi ý cho máy này (${v} GB bộ nhớ cho model)`, sgChat: "Trả lời", sgEmb: "Lập chỉ mục", sgOcr: "OCR",
+    sgNote: "Chọn trong các model đã tải. Model trả lời và model lập chỉ mục chạy cùng lúc nên được tính chung VRAM; model OCR chạy riêng. Ngữ cảnh tự chọn theo VRAM khi hỏi.",
+    sgNeedChat: "Chưa có model trả lời nào vừa máy. Hãy tải một model nhỏ: ollama pull gemma3:4b (~3,3 GB).",
+    sgNeedEmb: "Nên tải model lập chỉ mục đa ngôn ngữ: ollama pull qwen3-embedding:0.6b (~0,6 GB) – tìm tài liệu tiếng Việt tốt hơn hẳn nomic-embed-text.",
+    sgNeedOcr: "Nên tải một model thị giác để đọc PDF scan và ảnh: ollama pull qwen3-vl:8b-instruct (~6 GB), hoặc qwen3-vl:2b-instruct (~1,9 GB) cho máy ít bộ nhớ. Dùng bản -instruct: bản thường chỉ suy nghĩ mà không chép chữ.",
+    sgSame: "✓ Đang dùng đúng bộ model gợi ý", sgApply: "Dùng gợi ý này",
+    sgReindex: "Model lập chỉ mục khác với chỉ mục hiện có: sau khi dùng gợi ý, bấm \"Cập nhật chỉ mục\" (không phải OCR lại).",
+    embedGroupOk: "Model embedding (dùng được ngay)", embedGroupOther: "Model khác (không phải model embedding)",
+    embedWarnT: "Model này không phải model embedding",
+    embedWarn: m => `Ollama báo ${m} không có khả năng embedding nên không dùng để lập chỉ mục được. Hãy chọn một model ở nhóm trên, hoặc tải: ollama pull qwen3-embedding:0.6b`,
+    chatEmbed: "Model lập chỉ mục (embedding)", chatEmbedHelp: "Dùng để tìm tài liệu liên quan. Đổi model này thì phải lập lại chỉ mục.",
+    docsTitle: "Tài liệu", docsOpen: "Mở thư mục", docsIndex: "Cập nhật chỉ mục", chatSend: "Gửi", chatNew: "＋ Mới",
+    convTitle: "Lịch sử trò chuyện", convSearch: "🔍 Tìm trong lịch sử…", convToggle: "Ẩn / hiện lịch sử trò chuyện",
+    convEmpty: "Chưa có cuộc trò chuyện nào. Đặt câu hỏi đầu tiên, cuộc trò chuyện sẽ được lưu tự động.",
+    convNone: "Không có cuộc trò chuyện nào khớp.", convNew: "Cuộc trò chuyện mới",
+    convToday: "Hôm nay", convYesterday: "Hôm qua", convWeek: "7 ngày qua", convOlder: "Cũ hơn",
+    convMsgs: n => `${n} tin nhắn`, convRename: "Đổi tên", convDelete: "Xóa", convRenameAsk: "Tên mới cho cuộc trò chuyện:",
+    convDeleteAsk: t => `Xóa cuộc trò chuyện "${t}"? Không khôi phục lại được.`, convBusy: "Đợi AI trả lời xong rồi hãy chuyển cuộc trò chuyện.",
+    chatPlaceholder: "Nhập câu hỏi… (Enter để gửi, Shift+Enter để xuống dòng)",
+    chatEmpty: "Hãy đặt câu hỏi về tài liệu trong thư mục. AI sẽ tìm tài liệu liên quan, đọc rồi trả lời kèm tên tài liệu nguồn.",
+    docsDir: (d, ext) => `Bỏ tài liệu vào thư mục này, chia thư mục con tùy ý: ${d}\nLoại file đọc được: ${ext}`,
+    docsNone: "Thư mục chưa có tài liệu nào.", docsNoEmbed: "Ollama chưa có model embedding nào. Tải bằng lệnh: ollama pull qwen3-embedding:0.6b",
+    docsIndexing: (a, b, f) => `Đang lập chỉ mục ${a}/${b}: ${f}`,
+    ocrLabel: "Model OCR (đọc PDF scan và file ảnh)", ocrNone: "(Không OCR – bỏ qua trang scan)",
+    ocrHelp: "Model thị giác chép chữ từ trang scan / ảnh. Kết quả OCR được lưu lại nên lần sau không phải đọc lại. Mỗi trang mất khoảng 5–20 giây.",
+    docsCancel: "Dừng", stepScan: "1. Tiếp nhận", stepRead: "2. Lấy chữ", stepOcr: "2. OCR", stepEmbed: "3–5. Vector hóa, lưu",
+    stScan: "Bước 1 · Đang quét thư mục tài liệu…",
+    stRead: (a, b, f) => `Bước 2 · Đọc chữ ${a}/${b}: ${f}`,
+    stOcr: (a, b, f) => `Bước 2 · OCR trang ${a}/${b}${f ? ": " + f : ""}`,
+    stEmbed: (a, b, f) => `Bước 3–5 · Cắt đoạn, vector hóa và lưu ${a}/${b}: ${f}`,
+    stCancel: "Đang dừng…",
+    fOcr: n => `, đã OCR ${n} trang`, fOcrMissing: n => `${n} trang scan chưa OCR – chọn model OCR rồi bấm "Cập nhật chỉ mục"`,
+    docsOcrMissing: n => `${n} tài liệu có trang scan chưa OCR. Chọn model OCR rồi bấm "Cập nhật chỉ mục".`,
+    docsReady: (n, c, m) => `Đã lập chỉ mục ${n} tài liệu (${c} đoạn) bằng ${m}.`,
+    docsStale: n => `Có ${n} tài liệu mới hoặc đã sửa chưa được lập chỉ mục. Bấm "Cập nhật chỉ mục".`,
+    docsOtherModel: m => `Chỉ mục hiện tại lập bằng ${m}. Bấm "Cập nhật chỉ mục" để lập lại bằng model đang chọn.`,
+    docsNoIndex: "Chưa lập chỉ mục. Bấm \"Cập nhật chỉ mục\" để bắt đầu.",
+    fIndexed: n => `đã lập chỉ mục (${n} đoạn)`, fNew: "mới hoặc đã sửa, chưa lập chỉ mục", fEmpty: "không đọc được chữ (có thể là bản scan)",
+    srcLabel: "Tài liệu đã đọc:", srcFull: "cả tài liệu", srcPart: "trích đoạn", srcNone: "Không tìm thấy tài liệu liên quan.", srcChat: "💬 Trò chuyện – câu này không cần tra tài liệu.",
+    chatStats: (s, tps, ctx) => `${s} giây · ${tps} token/giây · ngữ cảnh ${ctx} token`,
+    mdirLabel: "Thư mục model của Ollama", mdirOther: "Thư mục khác…", mdirDefault: "mặc định",
+    mdirOpt: (n, free) => `${n} model · ổ còn trống ${free} GB`,
+    mdirHelp: "Ollama đọc model trong một thư mục (biến OLLAMA_MODELS). Đổi ở đây để dùng model ở ổ khác; app sẽ khởi động lại Ollama.",
+    mdirBusy: "Đang đổi thư mục và khởi động lại Ollama (khoảng 10 giây)…",
+    mdirAsk: "Nhập đường dẫn thư mục chứa model (ví dụ D:\\Ollama Models):",
+    mdirConfirm: p => `Đổi thư mục model của Ollama sang:\n${p}\n\nOllama sẽ được khởi động lại, model đang nạp bị gỡ khỏi bộ nhớ. Model ở thư mục cũ không tự chuyển sang. Tiếp tục?`,
+    fitConfirm: msg => `Model này có thể không phù hợp với phần cứng:\n\n${msg}\n\nBạn vẫn muốn chạy test?`,
+    spillTitle: "Model không nằm hết trên GPU – một phần đang chạy bằng CPU",
+    spillBody: (e, need, total) => `${e.model || "Model"} cần khoảng ${need} GB (model + ngữ cảnh ${e.ctx ? fmt(e.ctx) : "?"} token) nhưng Ollama chỉ đưa được ${e.gpu_pct != null ? e.gpu_pct : "?"}% lên GPU; ${gb(e.shared_mb)} GB còn lại chạy bằng CPU nên tốc độ giảm mạnh.`,
+    spillFix: ["Gỡ bớt model đang nạp (nút \"Gỡ các model đã nạp\" ở thẻ Chatbot) rồi chạy lại.",
+               "Hoặc chọn model / bản nén nhỏ hơn (vd. tag :q4_K_M thay vì :q8_0).", "Máy bộ nhớ chung (RTX Spark): đóng bớt ứng dụng khác để GPU có thêm bộ nhớ."],
+    cpuTitle: "Model đang chạy bằng CPU, không dùng GPU",
+    cpuBody: e => "Ollama đang chạy model hoàn toàn bằng CPU. Kiểm tra driver NVIDIA (lệnh nvidia-smi) và bản Ollama mới nhất có hỗ trợ GPU NVIDIA trên máy này (Windows ARM64 cần Ollama và driver hỗ trợ CUDA cho ARM).",
+    cmpHint: "Tick tối đa 5 lần chạy để so sánh. Lần tick đầu tiên là mốc 100%.", cmpBtn: n => `So sánh hiệu năng (${n}/5)`,
+    cmpClear: "Bỏ chọn", cmpFull: "Đã chọn đủ 5 kết quả", cmpTick: "Chọn để đưa vào bảng so sánh",
+    cmpTitle: "So sánh hiệu năng", cmpBack: "← Quay lại", cmpCrit: "Tiêu chí", cmpBase: "Mốc 100%", cmpSetBase: "Đặt làm mốc",
+    cmpRemove: "Bỏ khỏi bảng so sánh", cmpSame: "tương đương",
+    cmpNote: "Kết quả đầu tiên là mốc 100%; các kết quả sau được tính theo mốc đó.",
+    cmpMixed: "Bạn đang so sánh các bài test khác nhau: chỉ tiêu chí trùng tên mới tính được phần trăm.",
+    stronger: n => `mạnh hơn ${n}%`, weaker: n => `yếu hơn ${n}%`, lowerGood: n => `thấp hơn ${n}% · tốt hơn`,
+    higherBad: n => `cao hơn ${n}% · kém hơn`, higherN: n => `cao hơn ${n}%`, lowerN: n => `thấp hơn ${n}%`,
+    grpPerf: "Hiệu năng", grpEnergy: "Điện năng", grpHw: "Phần cứng", priceLabel: "Giá điện giả định", priceUnit: "đ/kWh",
+    perHour: "/giờ", moneyUnit: "đ", costTip: "Tiền điện quy đổi theo giá điện giả định",
+    fxOn: "Tắt hiệu ứng nền động", fxOff: "Bật hiệu ứng nền động", logoTip: "Bấm để xem logo",
+  },
+  en: {
+    tagline: "AI GPU benchmark", pickTest: "Choose a test", run: "Run", cancel: "Cancel", progress: "Progress",
+    result: "Results", history: "History", lmStartBtn: "Start Ollama",
+    noResult: "No results yet. Pick a model and press Run, or select a past run from the history.",
+    lmUp: n => `Ollama is running (${n} models)`, lmDown: "Ollama is not running", lost: "Lost connection to AI Bench Spark",
+    lmStarting: "Starting Ollama…", gpuNone: "No NVIDIA GPU found (nvidia-smi)", memShared: "shared memory", gpuPower: w => `drawing ${w} W`,
+    loaded: " (loaded)", vision: " · vision", noModel: "(no models – download one with: ollama pull gemma3:4b)",
+    runN: (n, u) => `Run ${n} ${u}`, running: "Running…",
+    liveTitle: "What the AI is looking at (newest first) · click an image to enlarge",
+    galleryTitle: "Images and what the AI read · click an image to enlarge", answer: "Answer", openFile: "Open file",
+    pendingImg: "The AI is looking at this image…", expected: "expected", aiSaid: "AI answered", peak: "peak",
+    chartNote: s => `Each line is scaled to its own peak · horizontal axis spans ${s} s`, ranFor: s => `ran ${s} s`,
+    histEmpty: "No runs yet.", histShow: (a, b, n) => `Showing ${a}–${b} of ${n} runs`, histPer: "Rows per page",
+    hfText: "🔍 Search: model, test, GPU, results…", hfVga: "🖥 GPU (e.g. 4080)", hfTest: "All tests", hfModel: "All models",
+    hfClear: "✕ Clear filters", hfNone: "No runs match the filters.", histShowF: (a, b, n, all) => `Showing ${a}–${b} of ${n} matching runs (out of ${all})`, cols: ["Time", "Test", "Model", "GPU", "Key results"],
+    toDark: "Switch to dark theme", toLight: "Switch to light theme",
+    engGpu: e => `⚡ Running on GPU (Ollama)`, engSpill: "⚠ GPU out of VRAM", engCpu: "🐢 Running on CPU",
+    engIdle: "No model loaded", engLayers: n => `${n} layers on GPU`, engAll: "all layers on GPU", engCtx: n => `context ${n}`,
+    engShared: g => `${g} GB on CPU`, engRan: "Model ran on",
+    liveRun: "⏳ Running", liveHint: "You can still browse past results below while the test runs.",
+    fitOkT: "✓ Fits this hardware", fitTightT: "△ Barely fits in VRAM", fitWarnT: "⚠ Poor fit – it will run very slowly", fitBadT: "✗ Too large for this machine",
+    fitOk: (need, vram) => `Needs about ${need} GB; the GPU has ${vram} GB of VRAM.`,
+    fitTight: (need, vram) => `Needs about ${need} GB of ${vram} GB VRAM. Close other apps that use the GPU before running.`,
+    fitCtx: (need, vram, ctx, max) => `The model fits in VRAM, but it is loaded with a ${ctx}-token context, so it needs about ${need} GB, more than the ${vram} GB of VRAM. The rest spills into RAM and speed drops sharply. ` +
+      `Unload loaded models and run again (the app loads models with an 8,192-token context), or pick a smaller model.`,
+    fitOver: (need, vram) => `The model alone needs about ${need} GB; the GPU only has ${vram} GB of VRAM. The rest has to run from RAM/CPU, which is very slow. Pick a smaller model or quantization.`,
+    fitNo: (need, vram, ram) => `Needs about ${need} GB, more than VRAM (${vram} GB) and RAM (${ram} GB). It will most likely fail to load.`,
+    fitSpill: g => `Measured: this model is loaded and ${g} GB has spilled from VRAM into RAM. Test results will be far below what the GPU can do. Unload other models or pick a smaller one.`,
+    fitCpu: "Measured: this model is loaded and running on CPU, not the GPU.",
+    fitCtxTip: max => `Largest context that still fits in memory: about ${max} tokens.`,
+    fitEst: size => `Estimated from the model file size (${size} GB); may be off by a few GB.`,
+    unloadBtn: "Unload loaded models", unloading: "Unloading models…", loadedNone: "No model is loaded in memory.",
+    loadedList: (list, vram) => `Loaded: ${list}${vram ? ` · VRAM in use ${vram}` : ""}`,
+    unloadHint: "The answering model loads again automatically when you send a question.",
+    chatUseWeb: "Search the internet",
+    chatUseWebHelp: "On: your question is sent to an internet search engine; the AI reads the first few result pages and answers with source links.",
+    srcCited: "Cited sources (click to see the highlighted passage):", srcRead: "Sources the AI read:",
+    locPage: n => `page ${n}`, locSheet: n => `sheet ${n}`, locSec: n => `section ${n}`, locPart: n => `passage ${n}`,
+    toExcel: "Export to Excel", toExcelChart: "Export to Excel (with chart)", chartDrawing: "Drawing the chart…", chartBad: "Could not draw the chart (the AI returned invalid data).",
+    viewOpenFile: "Open the original file", viewOpenWeb: "Open the web page", viewLoading: "Opening…",
+    vtPage: "📄 Original page", vtText: "📝 Text", pgOf: n => `/ ${n}`, pgPage: "Page", pgHits: "Pages the AI used:",
+    pgNoMark: "Could not locate the matching lines on this page. See the 📝 Text tab for the cited passage.",
+    pgNoBox: "The OCR model used does not return text positions, so nothing can be highlighted on the image. See the 📝 Text tab.",
+    pgOcrNote: "Scanned page: highlight positions are estimated from the text blocks the OCR model detected.",
+    pgMarks: n => `${n} highlighted spot(s)`,
+    chatSetup: "Chatbot", chatModel: "Answering model", chatUseDocs: "Look up documents before answering",
+    chatUseDocsHelp: "On: the AI answers only from the documents in the folder below. Off: free chat with the model.",
+    sgOk: "  ✓ fits", sgTight: "  △ barely fits", sgNo: "  ✗ too large for this machine",
+    sgTitle: v => `💡 Suggested for this machine (${v} GB memory for models)`, sgChat: "Answering", sgEmb: "Indexing", sgOcr: "OCR",
+    sgNote: "Picked from the models you have. The answering and indexing models run together, so their VRAM is counted together; the OCR model runs alone. The context is sized to VRAM when you ask.",
+    sgNeedChat: "No answering model fits this machine. Download a small one: ollama pull gemma3:4b (~3.3 GB).",
+    sgNeedEmb: "Download a multilingual indexing model: ollama pull qwen3-embedding:0.6b (~0.6 GB) – much better for Vietnamese documents than nomic-embed-text.",
+    sgNeedOcr: "Download a vision model to read scanned PDFs and images: ollama pull qwen3-vl:8b-instruct (~6 GB), or qwen3-vl:2b-instruct (~1.9 GB) for low-memory PCs. Use the -instruct tag: the default one only thinks and never transcribes.",
+    sgSame: "✓ Already using the suggested models", sgApply: "Use this suggestion",
+    sgReindex: "The indexing model differs from the current index: after applying, click \"Update index\" (no re-OCR needed).",
+    embedGroupOk: "Embedding models (ready)", embedGroupOther: "Other models (not embedding models)",
+    embedWarnT: "This is not an embedding model",
+    embedWarn: m => `Ollama reports that ${m} has no embedding capability, so it cannot be used for indexing. Pick a model from the group above, or download one: ollama pull qwen3-embedding:0.6b`,
+    chatEmbed: "Indexing (embedding) model", chatEmbedHelp: "Used to find the relevant documents. Changing it requires re-indexing.",
+    docsTitle: "Documents", docsOpen: "Open folder", docsIndex: "Update index", chatSend: "Send", chatNew: "＋ New",
+    convTitle: "Chat history", convSearch: "🔍 Search history…", convToggle: "Show / hide chat history",
+    convEmpty: "No conversations yet. Ask your first question and the conversation is saved automatically.",
+    convNone: "No conversation matches.", convNew: "New conversation",
+    convToday: "Today", convYesterday: "Yesterday", convWeek: "Last 7 days", convOlder: "Older",
+    convMsgs: n => `${n} messages`, convRename: "Rename", convDelete: "Delete", convRenameAsk: "New name for the conversation:",
+    convDeleteAsk: t => `Delete the conversation "${t}"? This cannot be undone.`, convBusy: "Wait for the AI to finish answering before switching conversations.",
+    chatPlaceholder: "Type a question… (Enter to send, Shift+Enter for a new line)",
+    chatEmpty: "Ask about the documents in the folder. The AI finds the relevant documents, reads them and answers with the source names.",
+    docsDir: (d, ext) => `Put documents in this folder, with any subfolders you like: ${d}\nReadable file types: ${ext}`,
+    docsNone: "The folder has no documents yet.", docsNoEmbed: "Ollama has no embedding model. Download one with: ollama pull qwen3-embedding:0.6b",
+    docsIndexing: (a, b, f) => `Indexing ${a}/${b}: ${f}`,
+    ocrLabel: "OCR model (reads scanned PDFs and images)", ocrNone: "(No OCR – skip scanned pages)",
+    ocrHelp: "A vision model transcribes scanned pages / images. OCR results are saved, so they are not read again next time. Each page takes about 5–20 s.",
+    docsCancel: "Stop", stepScan: "1. Intake", stepRead: "2. Extract text", stepOcr: "2. OCR", stepEmbed: "3–5. Embed, store",
+    stScan: "Step 1 · Scanning the documents folder…",
+    stRead: (a, b, f) => `Step 2 · Reading text ${a}/${b}: ${f}`,
+    stOcr: (a, b, f) => `Step 2 · OCR page ${a}/${b}${f ? ": " + f : ""}`,
+    stEmbed: (a, b, f) => `Steps 3–5 · Splitting, embedding and storing ${a}/${b}: ${f}`,
+    stCancel: "Stopping…",
+    fOcr: n => `, ${n} page(s) OCR'd`, fOcrMissing: n => `${n} scanned page(s) not OCR'd – pick an OCR model and click "Update index"`,
+    docsOcrMissing: n => `${n} document(s) have scanned pages that are not OCR'd. Pick an OCR model and click "Update index".`,
+    docsReady: (n, c, m) => `${n} documents indexed (${c} passages) with ${m}.`,
+    docsStale: n => `${n} new or edited document(s) are not indexed yet. Click "Update index".`,
+    docsOtherModel: m => `The current index was built with ${m}. Click "Update index" to rebuild it with the selected model.`,
+    docsNoIndex: "No index yet. Click \"Update index\" to start.",
+    fIndexed: n => `indexed (${n} passages)`, fNew: "new or edited, not indexed yet", fEmpty: "no readable text (possibly a scan)",
+    srcLabel: "Documents read:", srcFull: "whole document", srcPart: "excerpts", srcNone: "No relevant document found.", srcChat: "💬 Small talk – no document lookup needed.",
+    chatStats: (s, tps, ctx) => `${s} s · ${tps} tokens/s · context ${ctx} tokens`,
+    mdirLabel: "Ollama model folder", mdirOther: "Another folder…", mdirDefault: "default",
+    mdirOpt: (n, free) => `${n} model${n === 1 ? "" : "s"} · ${free} GB free`,
+    mdirHelp: "Ollama reads models from one folder (the OLLAMA_MODELS variable). Switch it here to use models on another drive; the app restarts Ollama.",
+    mdirBusy: "Switching the folder and restarting Ollama (about 10 seconds)…",
+    mdirAsk: "Type the path of the folder that holds your models (e.g. D:\\Ollama Models):",
+    mdirConfirm: p => `Switch Ollama's model folder to:\n${p}\n\nOllama will restart and loaded models are unloaded. Models in the old folder are not moved. Continue?`,
+    fitConfirm: msg => `This model may not suit your hardware:\n\n${msg}\n\nRun the test anyway?`,
+    spillTitle: "The model is not fully on the GPU – part of it runs on the CPU",
+    spillBody: (e, need, total) => `${e.model || "The model"} needs about ${need} GB (model + ${e.ctx ? fmt(e.ctx) : "?"}-token context) but Ollama could only put ${e.gpu_pct != null ? e.gpu_pct : "?"}% of it on the GPU; the other ${gb(e.shared_mb)} GB runs on the CPU, so speed drops sharply.`,
+    spillFix: ["Unload other models (the \"Unload loaded models\" button on the Chatbot card) and run again.",
+               "Or pick a smaller model / quantization (e.g. a :q4_K_M tag instead of :q8_0).", "Shared-memory PCs (RTX Spark): close other apps to give the GPU more memory."],
+    cpuTitle: "The model is running on CPU, not the GPU",
+    cpuBody: e => "Ollama is running the model entirely on the CPU. Check the NVIDIA driver (nvidia-smi) and that the latest Ollama supports the NVIDIA GPU on this PC (Windows ARM64 needs Ollama and a driver with CUDA for ARM).",
+    cmpHint: "Tick up to 5 runs to compare. The first one you tick is the 100% baseline.", cmpBtn: n => `Compare performance (${n}/5)`,
+    cmpClear: "Clear", cmpFull: "5 results already selected", cmpTick: "Select to add to the comparison",
+    cmpTitle: "Performance comparison", cmpBack: "← Back", cmpCrit: "Metric", cmpBase: "Baseline 100%", cmpSetBase: "Set as baseline",
+    cmpRemove: "Remove from comparison", cmpSame: "about the same",
+    cmpNote: "The first result is the 100% baseline; the others are measured against it.",
+    cmpMixed: "You are comparing different tests: only metrics with the same name get a percentage.",
+    stronger: n => `${n}% stronger`, weaker: n => `${n}% weaker`, lowerGood: n => `${n}% lower · better`,
+    higherBad: n => `${n}% higher · worse`, higherN: n => `${n}% higher`, lowerN: n => `${n}% lower`,
+    grpPerf: "Performance", grpEnergy: "Power & energy", grpHw: "Hardware", priceLabel: "Assumed electricity price", priceUnit: "VND/kWh",
+    perHour: "/hour", moneyUnit: "VND", costTip: "Electricity cost at the assumed price",
+    fxOn: "Turn off animated background", fxOff: "Turn on animated background", logoTip: "Click to view the logo",
+  },
+};
+const t = (k, ...a) => { const v = T[lang][k]; return typeof v === "function" ? v(...a) : v; };
+
+// ----- Chữ do server/module trả về (tiếng Việt) → tiếng Anh. Dịch ở giao diện nên kết quả cũ trong lịch sử cũng đổi được. -----
+// Thêm module mới: bổ sung các chuỗi tiếng Việt của module vào đây; chuỗi chưa có sẽ hiện nguyên tiếng Việt.
+const D = {
+  "Đang tìm kiếm trên internet…": "Searching the internet…",
+  "Đang hiểu câu hỏi…": "Understanding the question…",
+  "Tài liệu dài quá ngữ cảnh, đang thử lại với ít đoạn hơn…": "Documents exceed the context, retrying with fewer passages…",
+  "Model suy nghĩ quá lâu, đang hỏi lại để trả lời trực tiếp…": "The model thought for too long, asking again for a direct answer…",
+  "Đang lập chỉ mục tài liệu, hãy đợi xong hoặc bấm Dừng": "Documents are being indexed; wait or click Stop",
+  "Đã dừng. Phần đã làm (trang đã OCR, tài liệu đã lưu) được giữ lại, bấm Cập nhật chỉ mục để làm tiếp.": "Stopped. Work done so far (OCR'd pages, stored documents) is kept; click Update index to continue.", "Tài liệu này chưa có trong chỉ mục": "This document is not in the index",
+  "Không tìm được kết quả trên internet (nguồn tìm kiếm không phản hồi). Hãy thử lại sau ít giây.": "No internet results (the search source did not respond). Try again in a few seconds.",
+  "Không có dữ liệu để xuất": "Nothing to export",
+  "Đang nạp model…": "Loading the model…", "Đang tìm tài liệu liên quan…": "Finding relevant documents…", "Model đang suy nghĩ…": "The model is thinking…",
+  "Chưa có chỉ mục tài liệu. Hãy bấm \"Cập nhật chỉ mục\" trước.": "There is no document index yet. Click \"Update index\" first.",
+  "Chưa chọn model embedding": "No embedding model selected", "Thiếu model hoặc câu hỏi": "Model or question missing",
+  // tên + mô tả module
+  "Benchmark GPU (LLM)": "GPU Benchmark (LLM)",
+  "Đo tốc độ sinh token, độ trễ, tốc độ đọc prompt, thông lượng song song, VRAM, nhiệt độ và công suất của GPU.":
+    "Measures token generation speed, latency, prompt reading speed, parallel throughput, VRAM, temperature and GPU power draw.",
+  "Benchmark phân tích hình ảnh": "Image Analysis Benchmark",
+  "Gửi ảnh test ở nhiều độ phân giải tới model thị giác; đo thời gian xử lý ảnh, tốc độ sinh và độ chính xác (đếm hình, đọc chữ).":
+    "Sends test images at several resolutions to a vision model; measures image processing time, generation speed and accuracy (counting shapes, reading text).",
+  "Phân tích hóa đơn bán lẻ": "Retail Invoice Analysis",
+  "Đọc ảnh hóa đơn trong thư mục, hiện bảng thống kê và ghi ra file Excel theo mẫu.":
+    "Reads invoice images from a folder, shows a summary table and writes an Excel file based on the template.",
+  // tham số
+  "Model LLM trong Ollama dùng để đo": "The Ollama LLM to benchmark",
+  "Số lần lặp mỗi kịch bản": "Runs per scenario", "Lấy trung vị để giảm nhiễu": "The median is used to reduce noise",
+  "Số token sinh (kịch bản ngắn)": "Tokens to generate (short scenario)", "Kịch bản sinh dài dùng gấp 3 lần": "The long-generation scenario uses 3× this",
+  "Số yêu cầu song song": "Parallel requests", "Đặt 1 để bỏ qua kịch bản song song": "Set to 1 to skip the parallel scenario",
+  "Gỡ các model khác trước khi nạp": "Unload other models before loading", "Giải phóng VRAM để đo chính xác": "Frees VRAM for accurate measurement",
+  "Model thị giác": "Vision model", "Chỉ hiện các model đọc được ảnh": "Only models that can read images are listed",
+  "Độ phân giải (px, cách nhau dấu phẩy)": "Resolutions (px, comma-separated)",
+  "Ảnh vuông; ảnh lớn có thể bị Ollama thu nhỏ trước khi đưa vào model": "Square images; Ollama may downscale large images before they reach the model",
+  "Số ảnh mỗi độ phân giải": "Images per resolution", "Mỗi ảnh có nội dung ngẫu nhiên khác nhau": "Each image has different random content",
+  "Model càng lớn đọc chữ viết tay càng tốt": "Larger models read handwriting better",
+  "Thư mục ảnh hóa đơn": "Invoice image folder", "Thư mục chứa file Excel mẫu": "Excel template folder", "Thư mục lưu kết quả": "Output folder",
+  "Số lượng hóa đơn cần chạy": "Number of invoices to process",
+  "Giới hạn token mỗi hóa đơn": "Token limit per invoice", "0 = không giới hạn: model suy nghĩ và viết tới khi xong": "0 = unlimited: the model thinks and writes until it is done",
+  "0 = chạy tất cả ảnh trong thư mục (theo thứ tự tên file)": "0 = process every image in the folder (in file-name order)",
+  // đơn vị
+  "điểm": "pts", "giây": "s", "ảnh/phút": "images/min", "dòng": "rows", "hóa đơn": "invoices", "đ": "₫",
+  // ô tóm tắt
+  "Điểm tổng": "Overall score", "Tốc độ sinh": "Generation speed", "Độ trễ token đầu": "Time to first token",
+  "Tốc độ đọc prompt": "Prompt reading speed", "VRAM đỉnh": "Peak VRAM", "GPU sử dụng (sinh dài)": "GPU usage (long generation)",
+  "Nhiệt độ cao nhất": "Peak temperature", "Công suất TB (sinh dài)": "Avg power (long generation)", "Hiệu suất": "Efficiency",
+  "Điện mỗi 1.000 token (sinh dài)": "Energy per 1,000 tokens (long generation)", "Điện GPU tiêu thụ (phần đo)": "GPU energy used (measured part)",
+  "Điện GPU tiêu thụ (cả lần chạy)": "GPU energy used (whole run)", "Thời gian nạp model": "Model load time",
+  "Tốc độ xử lý": "Processing speed", "Độ chính xác": "Accuracy", "Đếm hình đúng": "Shapes counted correctly",
+  "Đọc mã lớn đúng": "Large code read correctly", "Đọc số nhỏ đúng": "Small digits read correctly",
+  "GPU sử dụng TB": "Avg GPU usage", "Công suất TB": "Avg power", "Điện mỗi ảnh": "Energy per image",
+  "Hóa đơn đã đọc": "Invoices read", "Số dòng hàng hóa": "Line items", "Tổng thành tiền": "Total amount",
+  "Thời gian mỗi hóa đơn": "Time per invoice", "Điện mỗi hóa đơn": "Energy per invoice",
+  // bảng
+  "Chi tiết từng kịch bản (trung vị)": "Per-scenario details (median)", "Chi tiết theo độ phân giải (trung vị)": "Details by resolution (median)",
+  "Bảng thống kê hóa đơn (giống file Excel)": "Invoice table (same as the Excel file)",
+  "Kịch bản": "Scenario", "Token vào": "Input tokens", "Token ra": "Output tokens", "Sinh (tok/s)": "Generation (tok/s)",
+  "Đọc prompt (tok/s)": "Prompt read (tok/s)", "GPU TB (%)": "Avg GPU (%)", "VRAM đỉnh (MB)": "Peak VRAM (MB)",
+  "Công suất TB (W)": "Avg power (W)", "Điện (Wh)": "Energy (Wh)", "Ảnh": "Image", "Tới token đầu (ms)": "To first token (ms)",
+  "Tổng (giây)": "Total (s)", "Đếm hình": "Shape count", "Mã lớn": "Large code", "Số nhỏ": "Small digits",
+  "Sinh ngắn": "Short generation", "Ngữ cảnh dài": "Long context", "Sinh dài": "Long generation",
+  // biểu đồ
+  "GPU theo thời gian": "GPU over time", "GPU sử dụng": "GPU usage", "Nhiệt độ": "Temperature", "Công suất": "Power",
+  // thẻ ảnh
+  "Đếm hình tròn": "Circle count", "(không trả lời)": "(no answer)", "Mã hóa đơn": "Invoice no.", "Đơn vị bán": "Seller",
+  "Đơn vị mua": "Buyer", "Số dòng hàng": "Line items", "Thành tiền": "Amount", "Lỗi": "Error", "File Excel thống kê": "Excel summary file",
+};
+// Câu có phần thay đổi (log, chú thích ảnh, lỗi): thay từng cụm.
+const R = [
+  [/Model (.+) đã nạp sẵn \(bỏ qua đo thời gian nạp\)/, "Model $1 already loaded (load time not measured)"],
+  [/Gỡ các model đang nạp\.\.\./, "Unloading loaded models..."],
+  [/Nạp model (.+)\.\.\./, "Loading model $1..."],
+  [/Nạp xong sau ([\d.]+) giây/, "Loaded in $1 s"],
+  [/Chạy làm nóng \(nạp bộ mã hoá ảnh\)\.\.\./, "Warm-up run (loading the image encoder)..."],
+  [/Chạy làm nóng\.\.\./, "Warm-up run..."],
+  [/Sinh ngắn/, "Short generation"], [/Ngữ cảnh dài/, "Long context"], [/Sinh dài/, "Long generation"], [/Song song ×/, "Parallel ×"],
+  [/tổng ([\d.]+) tok\/s \((\d+) token trong ([\d.]+) giây\)/, "$1 tok/s total ($2 tokens in $3 s)"],
+  [/(\d+) token vào/, "$1 input tokens"], [/đếm\/mã\/số nhỏ/, "count/code/small digits"],
+  [/(\d+) ảnh hóa đơn · file mẫu:/, "$1 invoice images · template:"],
+  [/: hóa đơn (.+?), (\d+) dòng,/, ": invoice $1, $2 rows,"],
+  [/Đã ghi Excel:/, "Excel written:"], [/Hoàn tất/, "Done"], [/Đã huỷ/, "Cancelled"], [/LỖI/, "ERROR"],
+  [/ảnh chiếm (\d+) token/, "image used $1 tokens"], [/ · ảnh (\d+)\/(\d+)/, " · image $1/$2"],
+  [/^\/ (\d+) ảnh$/, "/ $1 images"], [/^Điện (\d+) ảnh \(Wh\)$/, "Energy for $1 images (Wh)"],
+  [/([\d.,]+) giây/g, "$1 s"],
+  [/Đang có một bài test chạy, hãy đợi hoặc huỷ nó trước/, "A test is already running — wait for it or cancel it first"],
+  [/Chưa chọn model/, "No model selected"], [/Không có module này/, "Unknown module"],
+  [/Không có thư mục ảnh hóa đơn:/, "Invoice image folder not found:"],
+  [/Không có ảnh hóa đơn nào trong/, "No invoice images in"],
+  [/Không tìm thấy file Excel mẫu \(\.xlsx\) trong/, "No Excel template (.xlsx) found in"],
+  [/Ollama không có model/, "Ollama has no model"], [/Tải bằng: ollama pull/, "Download it with: ollama pull"], [/Chưa cài Ollama/, "Ollama is not installed"],
+  [/Cần ít nhất một độ phân giải, ví dụ:/, "At least one resolution is required, e.g.:"],
+  [/Model không trả về JSON/, "The model did not return JSON"],
+  [/model suy nghĩ hết (\d+) token mà chưa trả lời, hỏi lại với chế độ suy nghĩ tắt/, "the model spent all $1 tokens thinking without answering; asking again with thinking off"],
+  [/model suy nghĩ lặp vòng \(sau (\d+) token\), hỏi lại với chế độ suy nghĩ tắt/, "the model got stuck in a thinking loop (after $1 tokens); asking again with thinking off"],
+  [/Model lặp vòng, không trả lời xong/, "The model looped and never finished answering"],
+  [/Model không trả lời \(hết giới hạn token\)/, "The model did not answer (token limit reached)"], [/Model trả lời rỗng/, "The model returned an empty answer"],
+  [/Model dùng hết ngữ cảnh \((\d+) token\) khi đang suy nghĩ nên chưa kịp trả lời\. Hãy gỡ bớt model khác để có thêm bộ nhớ \(app sẽ tự nạp lại với ngữ cảnh lớn hơn\), hoặc chọn model không có chế độ suy nghĩ\./,
+   "The model used up its context ($1 tokens) while thinking, before it could answer. Unload other models to free memory (the app will reload with a larger context), or pick a model without thinking mode."],
+  [/Câu trả lời bị cắt giữa chừng vì hết giới hạn token/, "The answer was cut off at the token limit"], [/JSON không đúng dạng/, "Malformed JSON"],
+  [/Không mở được file này/, "This file cannot be opened"], [/Ollama trả lỗi/, "Ollama returned error"], [/chỉ suy nghĩ mà không chép chữ ra\. Hãy dùng bản -instruct, vd\./, "only thinks and never transcribes the text. Use the -instruct tag, e.g."], [/Ollama báo lỗi:/, "Ollama reported an error:"],
+];
+// tr: dịch chữ của server. trx: chỉ dịch khi khớp nguyên cụm (dùng cho ô bảng, tránh sửa nhầm dữ liệu hóa đơn).
+const tr = s => {
+  if (lang === "vi" || typeof s !== "string") return s;
+  if (D[s] != null) return D[s];
+  return R.reduce((o, [re, to]) => o.replace(re, to), s);
+};
+const trx = s => lang === "vi" || typeof s !== "string" ? s : (D[s] ?? s.replace(/^Song song ×(\d+)$/, "Parallel ×$1"));
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api = async (path, opts) => {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(tr((await r.json().catch(() => ({}))).detail || r.statusText));
+  return r.json();
+};
+const fmt = v => v == null ? "–" : typeof v === "number" ? v.toLocaleString(lang === "vi" ? "vi-VN" : "en-US") : v;
+
+let mods = [], models = [], lmUp = false, jobId = null, selected = null, imagesVer = 0;
+let lastLog = [], lmStarting = false, connLost = false, lastGpu = null, lastEng = null, lastRam = null;
+const gb = mb => fmt(Math.round((mb || 0) / 102.4) / 10);
+// Nhãn ngắn: model chạy bằng GPU / GPU tràn VRAM / CPU, kèm vài con số.
+function engLabel(e) {
+  if (!e || e.mode === "unknown") return "";
+  if (e.mode === "idle") return t("engIdle");
+  const parts = [e.mode === "gpu" ? t("engGpu", e) : e.mode === "spill" ? t("engSpill") : t("engCpu")];
+  if (e.mode !== "cpu" && e.vram_mb != null) parts.push(`VRAM ${gb(e.vram_mb)} GB`);
+  if (e.mode === "spill") parts.push(t("engShared", gb(e.shared_mb)));
+  if (e.mode === "gpu" && e.gpu_layers > 0) parts.push(e.gpu_layers >= 1000 ? t("engAll") : t("engLayers", e.gpu_layers));
+  if (e.ctx) parts.push(t("engCtx", fmt(e.ctx)));
+  return parts.join(" · ");
+}
+
+// Thẻ ảnh: ảnh gửi cho AI + câu trả lời của AI so với đáp án.
+function shotCard(im) {
+  const checks = (im.checks || []).map(c =>
+    c.ok == null ? `<div class="chk muted">… ${esc(tr(c.label))}: ${t("expected")} ${esc(c.expected)}</div>`
+    : c.ok ? `<div class="chk ok">✓ ${esc(tr(c.label))}: ${esc(tr(c.got))}</div>`
+    : `<div class="chk bad">✗ ${esc(tr(c.label))}: ${t("aiSaid")} ${esc(tr(c.got))} · ${t("expected")} ${esc(c.expected)}</div>`).join("");
+  const fields = (im.fields || []).map(f => `<div><span class="muted">${esc(tr(f.label))}:</span> ${esc(fmt(f.label === "Lỗi" ? tr(f.value) : f.value))}</div>`).join("");
+  const meta = im.status === "pending" ? t("pendingImg") : tr(im.meta || "");
+  return `<div class="shot ${esc(im.status || "done")}"><img src="${esc(im.src)}" alt="${esc(tr(im.title))}" loading="lazy">
+    <div class="cap"><b>${esc(tr(im.title))}</b>${checks}${fields}<div class="muted" style="margin-top:4px">${esc(meta)}</div></div></div>`;
+}
+const galleryHtml = (images, title) => images.length
+  ? `<h3>${esc(title)}</h3><div class="gallery">${images.map(shotCard).join("")}</div>` : "";
+
+async function showLive(job) {
+  if (job.images_ver === imagesVer) return;
+  imagesVer = job.images_ver;
+  const images = await api(`/api/jobs/${job.id}/images`);
+  $("live").innerHTML = galleryHtml(images.slice().reverse(), t("liveTitle"));
+}
+// Khung "đang chạy" ở đầu cột phải: luôn hiện trong lúc test, kể cả khi người dùng mở xem kết quả cũ bên dưới.
+function paintLive(job) {
+  const mod = mods.find(m => m.id === job.module);
+  $("liveTitle").innerHTML = `${t("liveRun")}: ${esc(mod ? tr(mod.name) : "")}${job.model ? " · " + modelHtml(job.model) : ""}`;
+  $("livePct").textContent = Math.round(job.progress * 100) + "%";
+  $("liveBar").style.width = (job.progress * 100) + "%";
+  const last = lastLog[lastLog.length - 1];
+  $("liveLast").textContent = last ? tr(last) : t("liveHint");
+  $("liveCard").hidden = false;
+}
+
+// ----- Thư mục model của Ollama (OLLAMA_MODELS) -----
+let mdirs = null, mdirBusy = "";
+async function loadDirs() { try { mdirs = await api("/api/model-dirs"); } catch (e) {} paintDirs(); }
+function paintDirs() {
+  const el = $("mdir");
+  el.disabled = !!mdirBusy || !!jobId || !mdirs;
+  $("mdirHelp").textContent = mdirBusy ? t(mdirBusy) : t("mdirHelp");
+  if (!mdirs || document.activeElement === el) return;
+  el.innerHTML = mdirs.dirs.map(d => `<option value="${esc(d.path)}"${d.current ? " selected" : ""}>${esc(d.path)}${d.default ? ` (${t("mdirDefault")})` : ""} — ${t("mdirOpt", d.models, d.free_gb)}</option>`).join("")
+    + `<option value="">${t("mdirOther")}</option>`;
+}
+$("mdir").onchange = async () => {
+  const el = $("mdir"); el.blur();
+  const path = el.value || (prompt(t("mdirAsk")) || "").trim();
+  if (!path || path === mdirs.current || !confirm(t("mdirConfirm", path))) return paintDirs();
+  try {
+    mdirBusy = "mdirBusy"; paintDirs();
+    await api("/api/model-dir", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path})});
+  } catch (e) { alert(tr(e.message)); }
+  mdirBusy = ""; await loadDirs(); refreshStatus();
+};
+
+async function refreshStatus() {
+  try {
+    const s = await api("/api/status");
+    const had = models.length;
+    lmUp = s.ollama.up; models = s.models;
+    if (!had && models.length) loadHistory().catch(() => {});  // để lịch sử cũ tra được tham số nén
+    $("lmDot").className = "dot " + (lmUp ? "ok" : "bad");
+    $("lmStart").hidden = lmUp;
+    lastGpu = s.gpu; lastEng = s.engine; lastRam = s.ram_total_mb || null; connLost = false;
+    paintStatus();
+    fillModels();
+    if (s.running_job && !jobId) { jobId = s.running_job; poll(); }
+  } catch (e) { connLost = true; paintStatus(); $("lmDot").className = "dot bad"; }
+  $("run").disabled = !lmUp || !!jobId;
+  $("module").disabled = !!jobId;  // đang chạy thì không cho đổi bài test
+  paintDirs();
+  if (view === "chat") { fillChatModels(); paintChat(); if (!chatState || !chatState.indexing.running) loadChatState(); }
+  syncQuick();
+}
+// Dòng trạng thái trên thanh đầu (tách riêng để đổi ngôn ngữ là vẽ lại được ngay).
+function paintStatus() {
+  $("lmText").textContent = connLost ? t("lost") : lmStarting ? t("lmStarting") : lmUp ? t("lmUp", models.length) : t("lmDown");
+  const e = lmUp ? lastEng : null, label = engLabel(e), w = $("engWarn");
+  $("engText").hidden = !label; $("engText").className = "eng " + (e ? e.mode : "unknown"); $("engText").textContent = label;
+  w.hidden = !(e && (e.mode === "spill" || e.mode === "cpu")); w.classList.toggle("cpu", !!e && e.mode === "cpu");
+  if (!w.hidden) w.innerHTML = e.mode === "spill"
+    ? `<b class="t">${t("spillTitle")}</b>${esc(t("spillBody", e, gb((e.vram_mb || 0) + (e.shared_mb || 0)), gb(lastGpu && lastGpu.vram_total_mb)))}<ul>${t("spillFix").map(x => `<li>${x}</li>`).join("")}</ul>`
+    : `<b class="t">${t("cpuTitle")}</b>${esc(t("cpuBody", e))}`;
+  const g = lastGpu;
+  if (!g) return;
+  $("gpuText").textContent = g.name
+    ? `${g.name} · ${fmt(g.vram_used_mb)} / ${fmt(g.vram_total_mb)} MB ${g.unified ? t("memShared") : "VRAM"}` +
+      (g.power_w != null ? ` · ${t("gpuPower", fmt(Math.round(g.power_w)))}` : "") + ` · driver ${g.driver}`
+    : t("gpuNone");
+}
+// Các nút chạy nhanh bật/tắt theo nút Chạy.
+const syncQuick = () => document.querySelectorAll(".quick button").forEach(b => { b.disabled = $("run").disabled; });
+
+// Tham số nén (quantization, vd. MXFP4, Q4_K_M): lấy từ kết quả đã lưu; kết quả cũ chưa lưu thì tra theo model đang có trong Ollama.
+const quantOf = (id, q) => q || (models.find(m => m.id === id) || {}).quantization || "";
+const modelHtml = (id, q) => esc(id || "") + (quantOf(id, q) ? ` <span class="q">${esc(quantOf(id, q))}</span>` : "");
+
+// ----- Model có hợp phần cứng không: ước lượng trước khi chạy -----
+// Bộ nhớ cần = file model (+5% và 300 MB phụ trội) + bộ nhớ ngữ cảnh (~2,3 MB cho mỗi 1.024 token trên mỗi GB model,
+// rút ra từ các lần đo thật trên máy này). Chỉ là ước lượng; khi model đang nạp thì ưu tiên số đo thật.
+const FIT_CTX = 8192, FIT_RESERVE = 1024;
+// Bộ nhớ dành cho model (MB): VRAM của card rời; máy bộ nhớ chung (RTX Spark, GPU tích hợp) chỉ tính ~75% RAM,
+// phần còn lại để cho Windows và các ứng dụng khác.
+const usableMb = () => !lastGpu || !lastGpu.vram_total_mb ? 0 : lastGpu.unified ? lastGpu.vram_total_mb * 0.75 : lastGpu.vram_total_mb;
+function fitOf(id) {
+  const m = models.find(x => x.id === id), vram = usableMb();
+  if (!m || !m.size_bytes || !vram) return null;
+  const sizeGb = m.size_bytes / 2 ** 30, perK = sizeGb * 2.3;
+  const w = m.size_bytes / 2 ** 20 * 1.05 + 300;
+  const loaded = m.state === "loaded", ctx = (loaded && m.loaded_context_length) || FIT_CTX;
+  const need = w + perK * ctx / 1024, base = w + perK * FIT_CTX / 1024;
+  let max = Math.floor((vram - FIT_RESERVE - w) / perK / 4) * 4096;  // ngữ cảnh lớn nhất còn vừa VRAM, làm tròn xuống 4.096
+  if (m.max_context_length) max = Math.min(max, m.max_context_length);
+  const f = {size: gb(m.size_bytes / 2 ** 20), est: true, tip: ""};
+  const eng = loaded && models.filter(x => x.state === "loaded").length === 1 ? lastEng : null;
+  if (eng && eng.mode === "cpu") Object.assign(f, {level: "bad", title: t("fitWarnT"), text: t("fitCpu"), est: false});
+  else if (eng && eng.mode === "spill") Object.assign(f, {level: "warn", title: t("fitWarnT"), text: t("fitSpill", gb(eng.shared_mb)), est: false});
+  else if (lastRam && w > vram + lastRam * 0.8) Object.assign(f, {level: "bad", title: t("fitBadT"), text: t("fitNo", gb(base), gb(vram), gb(lastRam))});
+  else if (base > vram) Object.assign(f, {level: "warn", title: t("fitWarnT"), text: t("fitOver", gb(base), gb(vram))});
+  else if (loaded && need > vram - FIT_RESERVE && max >= 4096) Object.assign(f, {level: "warn", title: t("fitWarnT"), text: t("fitCtx", gb(need), gb(vram), fmt(ctx), fmt(max))});
+  else {
+    const tight = need > vram - FIT_RESERVE;
+    Object.assign(f, {level: tight ? "tight" : "ok", title: t(tight ? "fitTightT" : "fitOkT"), text: t(tight ? "fitTight" : "fitOk", gb(need), gb(vram))});
+    if (!loaded && max >= 4096 && max < (m.max_context_length || Infinity)) f.tip = t("fitCtxTip", fmt(max));
+  }
+  f.risky = f.level === "warn" || f.level === "bad";
+  return f;
+}
+function paintFit() {
+  document.querySelectorAll("select[data-type=model]").forEach(sel => {
+    const box = sel.nextElementSibling;
+    if (!box || !box.classList.contains("fit")) return;
+    const f = fitOf(sel.value);
+    box.hidden = !f;
+    if (!f) return;
+    box.className = "fit " + f.level;
+    box.innerHTML = `<b>${esc(f.title)}</b>${esc(f.text)}${f.tip ? " " + esc(f.tip) : ""}` + (f.est ? `<div class="muted">${esc(t("fitEst", f.size))}</div>` : "");
+  });
+}
+
+function fillModels() {
+  document.querySelectorAll("select[data-type=model]").forEach(sel => {    const cur = sel.value;
+    const only = sel.dataset.filter ? sel.dataset.filter.split(",") : null;  // vd. "vlm" = chỉ model thị giác
+    const list = models.filter(m => only ? only.includes(m.type) : m.type !== "embeddings");
+    sel.innerHTML = list.length
+      ? list.map(m => `<option value="${esc(m.id)}">${esc(m.id)}${m.quantization ? ` (${esc(m.quantization)})` : ""}${m.state === "loaded" ? t("loaded") : ""}${m.type === "vlm" ? t("vision") : ""}</option>`).join("")
+      : `<option value="">${esc(t("noModel"))}</option>`;
+    const loaded = list.find(m => m.state === "loaded");
+    sel.value = list.some(m => m.id === cur) ? cur : (loaded || list[0] || {id: ""}).id;
+  });
+  paintFit();
+}
+
+function renderForm() {
+  const m = mods.find(x => x.id === $("module").value);
+  if (!m) return;
+  $("moduleDesc").textContent = tr(m.description);
+  $("form").innerHTML = m.params.map(p => {
+    const help = p.help ? `<div class="help">${esc(tr(p.help))}</div>` : "";
+    const a = `name="${esc(p.key)}" data-type="${esc(p.type)}"`;
+    if (p.type === "bool")
+      return `<label class="check"><input type="checkbox" ${a} ${p.default ? "checked" : ""}>${esc(tr(p.label))}</label>${help}`;
+    let input;
+    if (p.type === "model") input = `<select ${a} data-filter="${esc((p.options || []).join(","))}"></select><div class="fit" hidden></div>`;
+    else if (p.type === "select") input = `<select ${a}>${(p.options || []).map(o => `<option ${o === p.default ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+    else if (p.type === "int") input = `<input type="number" ${a} value="${esc(p.default)}" ${p.min != null ? `min="${p.min}"` : ""} ${p.max != null ? `max="${p.max}"` : ""}>` +
+      ((p.presets || []).length ? `<div class="quick">${p.presets.map(n =>
+        `<button type="button" data-quick="${esc(p.key)}" data-value="${n}">${esc(t("runN", n, tr(p.unit || "")))}</button>`).join("")}</div>` : "");
+    else if (p.type === "textarea") input = `<textarea rows="5" ${a}>${esc(p.default)}</textarea>`;
+    else input = `<input type="text" ${a} value="${esc(p.default)}">`;
+    return `<label>${esc(tr(p.label))}</label>${input}${help}`;
+  }).join("");
+  fillModels();
+  syncQuick();
+}
+
+function formParams() {
+  const out = {};
+  $("form").querySelectorAll("[name]").forEach(el => { out[el.name] = el.type === "checkbox" ? el.checked : el.value; });
+  return out;
+}
+
+async function run() {
+  // Cảnh báo trước khi chạy nếu model được chọn không hợp phần cứng.
+  const risky = [...$("form").querySelectorAll("select[data-type=model]")].map(s => fitOf(s.value)).find(f => f && f.risky);
+  if (risky && !confirm(t("fitConfirm", `${risky.title}\n${risky.text}`))) return;
+  try {
+    const job = await api("/api/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({module: $("module").value, params: formParams()})});
+    jobId = job.id; poll();
+  } catch (e) { alert(e.message); }
+}
+
+async function poll() {
+  $("jobCard").hidden = false; $("cancel").hidden = false; $("run").disabled = true; $("module").disabled = true; syncQuick();
+  let job;
+  try { job = await api("/api/jobs/" + jobId); } catch (e) { jobId = null; $("liveCard").hidden = true; refreshStatus(); return; }
+  $("jobBar").style.width = (job.progress * 100) + "%";
+  $("jobPct").textContent = job.status === "running" ? Math.round(job.progress * 100) + "%" : "";
+  lastLog = job.log; const log = $("jobLog"); log.textContent = lastLog.map(tr).join("\n"); log.scrollTop = log.scrollHeight;
+  if (job.status === "running") paintLive(job);
+  if (job.images_ver) await showLive(job).catch(() => {});
+  if (job.status === "running") { setTimeout(poll, 700); return; }
+  jobId = null; imagesVer = 0; $("cancel").hidden = true; $("liveCard").hidden = true; $("live").innerHTML = "";
+  await refreshStatus(); histPage = 1; await loadHistory();  // lần chạy mới nằm ở trang đầu
+  if (job.result_id) showResult(job.result_id);
+}
+
+function chartSvg(c) {
+  const W = 1000, H = 180, P = 8, n = c.x.length;
+  if (n < 2) return "";
+  const x0 = c.x[0], x1 = c.x[n - 1] || 1;
+  let lines = "", legend = "";
+  c.series.forEach((s, i) => {
+    const vals = s.data.filter(v => v != null);
+    if (!vals.length) return;
+    const max = Math.max(...vals, 1e-9);
+    const pts = s.data.map((v, k) => v == null ? null :
+      `${(P + (c.x[k] - x0) / (x1 - x0) * (W - 2 * P)).toFixed(1)},${(H - P - v / max * (H - 2 * P)).toFixed(1)}`).filter(Boolean);
+    lines += `<polyline fill="none" stroke="var(--c${i % 4})" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts.join(" ")}"/>`;
+    legend += `<span><i style="background:var(--c${i % 4})"></i>${esc(tr(s.name))} · ${t("peak")} ${fmt(max)} ${esc(s.unit || "")}</span>`;
+  });
+  return `<h3>${esc(tr(c.title))}</h3><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${lines}</svg>
+    <div class="legend">${legend}<span>${t("chartNote", fmt(Math.round(x1 - x0)))}</span></div>`;
+}
+
+async function showResult(id) {
+  let r;
+  try { r = await api("/api/results/" + id); } catch (e) { return; }
+  selected = id;
+  document.querySelectorAll("#history tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.id === id));
+  const res = r.result || {};
+  $("resultTitle").innerHTML = `${esc(tr(r.module_name))} · ${modelHtml(r.params.model, (r.model_info || {}).quantization)}`;
+  let h = `<div class="muted" style="margin-bottom:12px">${esc(r.started_at.replace("T", " "))} · ${esc(r.gpu.name || "GPU ?")} · ${t("ranFor", fmt(r.duration_s))}` +
+    (engLabel(r.engine) && r.engine.mode !== "idle" ? `<br>${t("engRan")}: <span class="eng ${esc(r.engine.mode)}">${esc(engLabel(r.engine))}</span>` : "") + `</div>`;
+  h += `<div class="tiles">` + (res.summary || []).map(s =>
+    `<div class="tile"><div class="l">${esc(tr(s.label))}</div><div class="v">${esc(fmt(s.value))}<span class="u">${esc(tr(s.unit || ""))}</span></div></div>`).join("") + `</div>`;
+  (res.files || []).forEach(f => {
+    h += `<div class="filebox"><b>${esc(tr(f.label))}:</b> <span>${esc(f.path)}</span>
+      <button data-open="${esc(f.path)}">${t("openFile")}</button></div>`;
+  });
+  h += galleryHtml(res.images || [], t("galleryTitle"));
+  if (res.text) h += `<h3>${t("answer")}</h3><pre style="max-height:400px">${esc(res.text)}</pre>`;
+  (res.tables || []).forEach(tb => {
+    h += `<h3>${esc(tr(tb.title))}</h3><div class="scroll"><table><tr>${tb.columns.map(c => `<th>${esc(tr(c))}</th>`).join("")}</tr>` +
+      tb.rows.map(row => `<tr>${row.map(c => `<td>${esc(fmt(trx(c)))}</td>`).join("")}</tr>`).join("") + `</table></div>`;
+  });
+  (res.charts || []).forEach(c => { h += chartSvg(c); });
+  $("result").className = ""; $("result").innerHTML = h;
+}
+
+// Lịch sử có phân trang: danh sách tải 1 lần, chỉ vẽ trang đang xem. Ô tick so sánh giữ nguyên khi chuyển trang.
+let histList = [], histPage = 1;
+let histSize = (v => [10, 20, 50].includes(+v) ? +v : 10)(store.get("histSize"));
+async function loadHistory() {
+  histList = await api("/api/results");
+  fillHistFilter();
+  renderHistory();
+}
+// ----- Bộ lọc lịch sử: bài test, model, VGA và ô tìm tự do (không phân biệt hoa thường, dấu) -----
+const fold = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+function fillHistFilter() {
+  $("histFilter").hidden = !histList.length;
+  const uniq = key => [...new Set(histList.map(key).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const fillSel = (id, all, items) => {
+    const el = $(id), cur = el.value;
+    el.innerHTML = `<option value="">${esc(t(all))}</option>` + items.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+    el.value = items.some(([v]) => v === cur) ? cur : "";
+  };
+  const tests = new Map(histList.map(r => [r.module || r.module_name, tr(r.module_name)]));
+  fillSel("hfTest", "hfTest", [...tests].sort((a, b) => a[1].localeCompare(b[1])));
+  fillSel("hfModel", "hfModel", uniq(r => r.model).map(m => [m, m]));
+  $("hfVgaList").innerHTML = uniq(r => r.gpu).map(g => `<option value="${esc(g)}">`).join("");
+}
+function histFiltered() {
+  const test = $("hfTest").value, model = $("hfModel").value, vga = fold($("hfVga").value).trim();
+  const words = fold($("hfText").value).split(/\s+/).filter(Boolean);
+  $("hfClear").hidden = !(test || model || vga || words.length);
+  return histList.filter(r => {
+    if (test && (r.module || r.module_name) !== test) return false;
+    if (model && r.model !== model) return false;
+    if (vga && !fold(r.gpu).includes(vga)) return false;
+    if (!words.length) return true;
+    const hay = fold([r.started_at, r.module_name, tr(r.module_name), r.model, r.quant, r.gpu,
+      ...(r.summary || []).map(s => `${s.label} ${tr(s.label)} ${s.value} ${s.unit || ""}`)].join(" "));
+    return words.every(w => hay.includes(w));  // mọi từ đều phải có
+  });
+}
+["hfText", "hfVga"].forEach(id => $(id).addEventListener("input", () => { histPage = 1; renderHistory(); }));
+["hfTest", "hfModel"].forEach(id => $(id).addEventListener("change", () => { histPage = 1; renderHistory(); }));
+$("hfClear").onclick = () => {
+  ["hfText", "hfVga", "hfTest", "hfModel"].forEach(id => { $(id).value = ""; });
+  histPage = 1; renderHistory();
+};
+function pagerHtml(page, pages, total, all) {
+  const from = (page - 1) * histSize + 1, to = Math.min(total, page * histSize);
+  const info = total < all ? t("histShowF", from, to, total, all) : t("histShow", from, to, total);
+  // Số trang: luôn có trang đầu, cuối và 2 trang quanh trang hiện tại; chỗ trống thay bằng "…"
+  const nums = [];
+  for (let p = 1; p <= pages; p++)
+    if (p === 1 || p === pages || Math.abs(p - page) <= 1) nums.push(p);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  const btn = (p, label, dis, cur) => `<button data-page="${p}"${dis ? " disabled" : ""}${cur ? ' class="cur" aria-current="page"' : ""}>${label}</button>`;
+  return `<div class="pager"><span class="muted">${info}</span>
+    <span class="pages">${btn(page - 1, "‹", page <= 1)}${nums.map(p => p === "…" ? '<span class="gap">…</span>' : btn(p, p, false, p === page)).join("")}${btn(page + 1, "›", page >= pages)}</span>
+    <label class="psize">${t("histPer")} <select id="histSize">${[10, 20, 50].map(n => `<option${n === histSize ? " selected" : ""}>${n}</option>`).join("")}</select></label></div>`;
+}
+function renderHistory() {
+  if (!histList.length) { $("history").innerHTML = `<span class="muted">${t("histEmpty")}</span>`; return; }
+  const list = histFiltered();
+  if (!list.length) { $("history").innerHTML = `<div class="filebox">${t("hfNone")}</div>`; return; }
+  const pages = Math.max(1, Math.ceil(list.length / histSize));
+  histPage = Math.min(Math.max(1, histPage), pages);
+  const rows = list.slice((histPage - 1) * histSize, histPage * histSize);
+  $("history").innerHTML = `<div class="scroll"><table><tr><th></th>${t("cols").map(c => `<th>${c}</th>`).join("")}</tr>` +
+    rows.map(r => `<tr class="click ${r.id === selected ? "sel" : ""}" data-id="${esc(r.id)}">
+      <td><label class="pick"><input type="checkbox" data-cmp="${esc(r.id)}"><span class="ord"></span></label></td>
+      <td>${esc((r.started_at || "").replace("T", " "))}</td><td>${esc(tr(r.module_name))}</td><td>${modelHtml(r.model, r.quant)}</td><td>${esc(r.gpu || "")}</td>
+      <td>${r.summary.slice(0, 4).map(s => `${esc(tr(s.label))}: <b>${esc(fmt(s.value))}</b> ${esc(tr(s.unit || ""))}`).join(" · ")}</td></tr>`).join("") + `</table></div>` + (list.length > 10 || list.length < histList.length ? pagerHtml(histPage, pages, list.length, histList.length) : "");
+  document.querySelectorAll("#history tr.click").forEach(tr => tr.onclick = e => { if (!e.target.closest(".pick")) showResult(tr.dataset.id); });
+  syncCmp();
+}
+
+document.addEventListener("click", e => {
+  const z = $("zoom");
+  if (e.target.dataset.quick) {  // nút chạy nhanh: điền số vào ô rồi chạy luôn
+    if ($("run").disabled) return;
+    $("form").querySelector(`[name="${e.target.dataset.quick}"]`).value = e.target.dataset.value;
+    run();
+    return;
+  }
+  if (e.target.dataset.open) {
+    api("/api/open", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({path: e.target.dataset.open})}).catch(err => alert(err.message));
+    return;
+  }
+  if (e.target.closest(".shot img, #logo")) { z.querySelector("img").src = e.target.dataset.full || e.target.src; z.classList.add("on"); }
+  else if (z.classList.contains("on")) z.classList.remove("on");
+});
+$("run").onclick = run;
+$("cancel").onclick = () => jobId && api(`/api/jobs/${jobId}/cancel`, {method: "POST"});
+$("module").onchange = renderForm;
+$("form").addEventListener("change", e => { if (e.target.matches("select[data-type=model]")) paintFit(); });
+$("lmStart").onclick = async () => {
+  $("lmStart").disabled = true; lmStarting = true; paintStatus();
+  try { await api("/api/ollama/start", {method: "POST"}); } catch (e) { alert(e.message); }
+  $("lmStart").disabled = false; lmStarting = false; refreshStatus();
+};
+
+// ----- So sánh các lần chạy -----
+// cmp giữ id theo thứ tự tick: phần tử đầu là mốc 100%.
+const CMP_MAX = 5;
+let cmp = [], cmpOpen = false;
+let price = (v => v == null || isNaN(+v) ? 3000 : +v)(store.get("price"));  // đ / kWh
+const cmpData = {};
+// Chiều "tốt": 1 = càng cao càng mạnh, -1 = càng thấp càng tốt (điện, độ trễ, nhiệt...), 0 = chỉ để tham khảo.
+const LOWER = new Set(["Độ trễ token đầu", "Thời gian nạp model", "Thời gian mỗi hóa đơn", "Nhiệt độ cao nhất"]);
+const NEUTRAL = /^(VRAM đỉnh|GPU sử dụng|Hóa đơn đã đọc|Số dòng hàng hóa|Tổng thành tiền)/;
+const HW = /^(VRAM đỉnh|GPU sử dụng|Nhiệt độ)/;
+const cmpGroup = s => ["Wh", "W", "tok/s/W"].includes(s.unit) ? "energy" : HW.test(s.label) ? "hw" : "perf";
+const cmpDir = s => NEUTRAL.test(s.label) ? 0 : (s.unit === "Wh" || s.unit === "W" || LOWER.has(s.label)) ? -1 : 1;
+const money = v => "≈ " + v.toLocaleString(lang === "vi" ? "vi-VN" : "en-US", {maximumFractionDigits: v < 100 ? 2 : 0}) + " " + t("moneyUnit");
+
+function syncCmp() {
+  document.querySelectorAll("#history input[data-cmp]").forEach(cb => {
+    const i = cmp.indexOf(cb.dataset.cmp);
+    cb.checked = i >= 0; cb.disabled = i < 0 && cmp.length >= CMP_MAX;
+    cb.title = cb.disabled ? t("cmpFull") : t("cmpTick");
+    cb.nextElementSibling.textContent = i >= 0 ? i + 1 : "";
+  });
+  $("cmpGo").textContent = t("cmpBtn", cmp.length); $("cmpGo").disabled = cmp.length < 2;
+  $("cmpClear").hidden = !cmp.length;
+}
+$("history").addEventListener("click", e => {
+  const b = e.target.closest("button[data-page]");
+  if (b && !b.disabled) { histPage = +b.dataset.page; renderHistory(); }
+});
+$("history").addEventListener("change", e => {
+  if (e.target.id === "histSize") {
+    const first = (histPage - 1) * histSize;  // giữ dòng đầu đang xem khi đổi số dòng mỗi trang
+    histSize = +e.target.value; store.set("histSize", histSize); histPage = Math.floor(first / histSize) + 1; renderHistory(); return;
+  }
+  const id = e.target.dataset.cmp;
+  if (!id) return;
+  if (!e.target.checked) cmp = cmp.filter(x => x !== id);
+  else if (cmp.length < CMP_MAX) cmp.push(id);
+  syncCmp();
+});
+$("cmpClear").onclick = () => { cmp = []; syncCmp(); };
+$("cmpGo").onclick = openCompare;
+
+async function openCompare() {
+  $("cmpGo").disabled = true;
+  for (const id of cmp) if (!cmpData[id]) { try { cmpData[id] = await api("/api/results/" + id); } catch (e) {} }
+  cmp = cmp.filter(id => cmpData[id]);
+  syncCmp();
+  if (cmp.length < 2) return;
+  cmpOpen = true; document.querySelector("main").hidden = true; $("compare").hidden = false;
+  renderCompare(); scrollTo(0, 0);
+}
+function closeCompare() {
+  cmpOpen = false; $("compare").hidden = true; document.querySelector("main").hidden = false; syncCmp();
+}
+
+// 1 ô: giá trị, thanh, % so với mốc (cột đầu), và tiền điện nếu là số đo điện.
+function cmpCell(row, i) {
+  const s = row.cells[i], base = i === 0 ? " class=\"base\"" : "";
+  if (!s || s.value == null) return `<td${base}><span class="muted">–</span></td>`;
+  const v = s.value;
+  let h = `<div class="cv">${esc(fmt(v))}<span class="u">${esc(tr(s.unit || ""))}</span></div>`;
+  if (typeof v !== "number") return `<td${base}>${h}</td>`;
+  const b = row.cells[0] && row.cells[0].value;
+  const max = Math.max(...row.cells.map(c => c && typeof c.value === "number" ? Math.abs(c.value) : 0), 1e-9);
+  let cls = "base", note = t("cmpBase"), pct = 100;
+  if (i > 0) {
+    if (typeof b === "number" && b > 0) {
+      pct = v / b * 100;
+      const n = Math.round(Math.abs(pct - 100)), d = fmt(n), up = pct > 100, arrow = up ? "▲ " : "▼ ";
+      if (n < 1) { cls = "same"; note = t("cmpSame"); }
+      else if (row.dir > 0) { cls = up ? "good" : "bad"; note = arrow + t(up ? "stronger" : "weaker", d); }
+      else if (row.dir < 0) { cls = up ? "bad" : "good"; note = arrow + t(up ? "higherBad" : "lowerGood", d); }
+      else { cls = "same"; note = arrow + t(up ? "higherN" : "lowerN", d); }
+    } else pct = null;  // mốc không có tiêu chí này → không tính được %
+  }
+  h += `<div class="cbar ${pct == null ? "same" : cls}"><div style="width:${(Math.abs(v) / max * 100).toFixed(1)}%"></div></div>`;
+  if (pct != null) h += `<div class="cp ${cls}"><b>${fmt(Math.round(pct))}%</b><span>${note}</span></div>`;
+  if (s.unit === "Wh") h += `<div class="cost" title="${t("costTip")}">${money(v / 1000 * price)}</div>`;
+  if (s.unit === "W") h += `<div class="cost" title="${t("costTip")}">${money(v / 1000 * price)}${t("perHour")}</div>`;
+  return `<td${base}>${h}</td>`;
+}
+
+function renderCompare() {
+  const runs = cmp.map(id => cmpData[id]).filter(Boolean);
+  const rows = [];  // mỗi tiêu chí 1 dòng, ghép theo tên tiêu chí
+  runs.forEach((r, i) => ((r.result || {}).summary || []).forEach(s => {
+    let row = rows.find(x => x.label === s.label);
+    if (!row) rows.push(row = {label: s.label, group: cmpGroup(s), dir: cmpDir(s), cells: runs.map(() => null)});
+    row.cells[i] = s;
+  }));
+  const head = runs.map((r, i) => {
+    const eng = engLabel(r.engine) && r.engine.mode !== "idle" ? `<div><span class="eng ${esc(r.engine.mode)}" style="white-space:normal">${esc(engLabel(r.engine))}</span></div>` : "";
+    return `<th${i ? "" : ' class="base"'}><div class="hd">${i ? `<button data-base="${i}">${t("cmpSetBase")}</button>` : `<span class="tag">${t("cmpBase")}</span>`}
+      <button class="x" data-drop="${i}" title="${t("cmpRemove")}">✕</button></div>
+      <div class="m">${modelHtml(r.params.model, (r.model_info || {}).quantization)}</div><div class="muted">${esc(tr(r.module_name))}</div>
+      <div class="muted">${esc((r.gpu || {}).name || "GPU ?")}</div><div class="muted">${esc((r.started_at || "").replace("T", " "))}</div>${eng}</th>`;
+  }).join("");
+  const priceBox = `<label>${t("priceLabel")} <input type="number" id="price" min="0" step="100" value="${price}"> ${t("priceUnit")}</label>`;
+  const body = [["perf", "🚀 " + t("grpPerf"), ""], ["energy", "⚡ " + t("grpEnergy"), priceBox], ["hw", "🖥 " + t("grpHw"), ""]].map(([g, name, extra]) => {
+    const list = rows.filter(r => r.group === g);
+    return list.length ? `<tr class="grp"><td colspan="${runs.length + 1}">${name}${extra}</td></tr>` +
+      list.map(row => `<tr><td>${esc(tr(row.label))}</td>${runs.map((_, i) => cmpCell(row, i)).join("")}</tr>`).join("") : "";
+  }).join("");
+  const mixed = new Set(runs.map(r => r.module)).size > 1 ? `<div class="filebox">${t("cmpMixed")}</div>` : "";
+  $("compare").innerHTML = `<div class="card"><div class="cmphead"><button id="cmpBack">${t("cmpBack")}</button><h2>${t("cmpTitle")}</h2>
+    <span class="muted">${t("cmpNote")}</span></div>${mixed}
+    <div class="scroll" style="margin-top:12px"><table class="cmp" style="min-width:${180 + runs.length * 210}px">
+    <colgroup><col style="width:180px">${runs.map(() => "<col>").join("")}</colgroup><tr><th>${t("cmpCrit")}</th>${head}</tr>${body}</table></div></div>`;
+}
+$("compare").addEventListener("click", e => {
+  const d = e.target.dataset;
+  if (e.target.id === "cmpBack") return closeCompare();
+  if (d.base) { const [id] = cmp.splice(+d.base, 1); cmp.unshift(id); renderCompare(); }
+  if (d.drop) { cmp.splice(+d.drop, 1); if (cmp.length < 2) closeCompare(); else renderCompare(); }
+});
+$("compare").addEventListener("change", e => {
+  if (e.target.id !== "price") return;
+  price = Math.max(0, +e.target.value || 0); store.set("price", price); renderCompare();
+});
+
+// ----- Ngôn ngữ -----
+function fillModules() {
+  const cur = $("module").value;
+  $("module").innerHTML = mods.map(m => `<option value="${esc(m.id)}">${esc(tr(m.name))}</option>`).join("");
+  if (cur) $("module").value = cur;
+}
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $("langVi").classList.toggle("on", lang === "vi"); $("langEn").classList.toggle("on", lang === "en");
+  $("logo").title = t("logoTip");
+  paintTools(); paintStatus(); paintDirs(); paintChat(); paintDocs(); paintConvs(); paintConvName();
+  if (mods.length) {
+    const keep = formParams();  // giữ lại những gì người dùng đã nhập
+    fillModules(); renderForm();
+    $("form").querySelectorAll("[name]").forEach(el => {
+      if (!(el.name in keep)) return;
+      if (el.type === "checkbox") el.checked = keep[el.name]; else if (keep[el.name]) el.value = keep[el.name];
+    });
+    paintFit();
+  }
+  $("jobLog").textContent = lastLog.map(tr).join("\n");
+  if (jobId) imagesVer = 0;  // lần hỏi tiến trình kế tiếp sẽ vẽ lại ảnh đang chạy theo ngôn ngữ mới
+  if (selected) showResult(selected);
+  else { $("resultTitle").textContent = t("result"); $("result").className = "muted"; $("result").textContent = t("noResult"); }
+  if (mods.length) loadHistory().catch(() => {});
+  syncCmp();
+  if (cmpOpen) renderCompare();
+}
+function setLang(l) { lang = l; store.set("lang", l); applyLang(); }
+$("langVi").onclick = () => setLang("vi");
+$("langEn").onclick = () => setLang("en");
+
+// ----- Giao diện sáng/tối + nền động -----
+const root = document.documentElement;
+function paintTools() {
+  const dark = root.dataset.theme === "dark";
+  $("themeBtn").textContent = dark ? "☀️" : "🌙";
+  $("themeBtn").title = t(dark ? "toLight" : "toDark");
+  $("fxBtn").title = t(fx.on ? "fxOn" : "fxOff");
+  $("fxBtn").classList.toggle("off", !fx.on);
+}
+$("themeBtn").onclick = () => {
+  root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  store.set("theme", root.dataset.theme);
+  fx.recolor(); paintTools();
+};
+
+// Mạng hạt nối nhau + "gói dữ liệu" chạy trên đường nối. Vẽ ~30 hình/giây bằng canvas 2D để nhẹ máy.
+const fx = (() => {
+  const cv = $("fx"), cx = cv.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const LINK = 150;
+  let W = 0, H = 0, nodes = [], packets = [], streams = [], raf = 0, last = 0, c1 = "", c2 = "";
+  const self = { on: store.get("fx") !== "0", recolor, toggle };
+  function recolor() {
+    const cs = getComputedStyle(root);
+    c1 = cs.getPropertyValue("--fx").trim(); c2 = cs.getPropertyValue("--fx2").trim();
+    if (self.on && !raf) draw(false);
+  }
+  function resize() {
+    const d = Math.min(devicePixelRatio || 1, 1.5);
+    W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
+    const n = Math.min(90, Math.round(W * H / 20000));
+    nodes = Array.from({length: n}, () => ({x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .6, vy: (Math.random() - .5) * .6, r: 1 + Math.random() * 1.8}));
+    packets = [];
+    // Dòng mã rơi (digital rain) thưa, mờ: mỗi cột một chuỗi ký tự hex
+    streams = Array.from({length: Math.round(W / 70)}, () => newStream(true));
+    if (self.on && !raf) draw(false);
+  }
+  const GLYPHS = "01ABCDEF<>/{}#$%アイウエオカキ";
+  function newStream(any) {
+    return {x: Math.floor(Math.random() * W / 18) * 18 + 6, y: any ? Math.random() * H : -Math.random() * H * .5,
+      v: 1.2 + Math.random() * 2.6, len: 8 + Math.floor(Math.random() * 16),
+      s: Array.from({length: 24}, () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)])};
+  }
+  function draw(move) {
+    cx.clearRect(0, 0, W, H);
+    cx.font = "13px Consolas, monospace";
+    for (let k = 0; k < streams.length; k++) {
+      const st = streams[k];
+      if (move) { st.y += st.v; if (Math.random() < .05) st.s[Math.floor(Math.random() * st.s.length)] = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]; }
+      for (let i = 0; i < st.len; i++) {
+        const y = st.y - i * 16; if (y < -16 || y > H + 16) continue;
+        cx.fillStyle = i === 0 ? `rgba(${c1},.75)` : `rgba(${i % 5 === 0 ? c2 : c1},${(.32 * (1 - i / st.len)).toFixed(3)})`;
+        cx.fillText(st.s[i % st.s.length], st.x, y);
+      }
+      if (st.y - st.len * 16 > H) streams[k] = newStream(false);
+    }
+    if (move) for (const p of nodes) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+    }
+    cx.lineWidth = 1;
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
+      if (d2 > LINK * LINK) continue;
+      cx.strokeStyle = `rgba(${c1},${(.5 * (1 - Math.sqrt(d2) / LINK)).toFixed(3)})`;
+      cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+      if (move && packets.length < 24 && Math.random() < .003) packets.push({a, b, k: 0});
+    }
+    cx.fillStyle = `rgba(${c1},.75)`;
+    for (const p of nodes) { cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); }
+    packets = packets.filter(p => p.k <= 1);
+    for (const p of packets) {
+      if (move) p.k += .025;
+      const x = p.a.x + (p.b.x - p.a.x) * p.k, y = p.a.y + (p.b.y - p.a.y) * p.k;
+      cx.fillStyle = `rgba(${c2},.22)`; cx.beginPath(); cx.arc(x, y, 7, 0, 6.283); cx.fill();
+      cx.fillStyle = `rgba(${c2},.95)`; cx.beginPath(); cx.arc(x, y, 2.4, 0, 6.283); cx.fill();
+    }
+  }
+  function loop(ts) { raf = requestAnimationFrame(loop); if (ts - last < 33) return; last = ts; draw(true); }
+  function start() {
+    root.classList.toggle("fx-off", !self.on);
+    cancelAnimationFrame(raf); raf = 0;
+    if (!self.on) { cx.clearRect(0, 0, W, H); return; }
+    if (still) draw(false); else raf = requestAnimationFrame(loop);
+  }
+  function toggle() { self.on = !self.on; store.set("fx", self.on ? "1" : "0"); start(); }
+  addEventListener("resize", resize);
+  recolor(); resize(); start();
+  return self;
+})();
+$("fxBtn").onclick = () => { fx.toggle(); paintTools(); };
+
+// ----- Chatbot hỏi đáp tài liệu -----
+let view = "bench", chatMsgs = [], chatBusy = false, chatState = null, chatTimer = null;
+function setView(v) {
+  view = v; store.set("view", v);
+  $("viewBench").classList.toggle("on", v === "bench"); $("viewChat").classList.toggle("on", v === "chat");
+  $("chatView").hidden = v !== "chat";
+  document.querySelector("main").hidden = v === "chat" || cmpOpen;
+  $("compare").hidden = v === "chat" || !cmpOpen;
+  if (v === "chat") { fillChatModels(); loadChatState(); }
+}
+$("viewBench").onclick = () => setView("bench");
+$("viewChat").onclick = () => setView("chat");
+// ----- Model nào vừa máy này (Chatbot) -----
+// Model trả lời và model lập chỉ mục chạy CÙNG LÚC khi hỏi đáp nên VRAM phải chứa cả hai; model OCR chạy một mình
+// (app gỡ các model khác khi OCR). Bộ nhớ ước lượng như phần Benchmark: file model +5% +0,3 GB, cộng bộ nhớ ngữ cảnh.
+const SG_CHAT_CTX = 16384, SG_EMB_CTX = 4096, SG_OCR_CTX = 16384;
+const vramGb = () => usableMb() / 1024;
+const memGb = (m, ctx) => { if (!m || !m.size_bytes) return 0; const s = m.size_bytes / 2 ** 30; return s * 1.05 + 0.3 + s * 2.3 * ctx / 1048576; };
+const fitLevel = need => { const v = vramGb(); return !v || !need ? "" : need <= v - 1.5 ? "ok" : need <= v - 0.3 ? "tight" : "no"; };
+const byId = id => models.find(m => m.id === id);
+// Model trả lời tốt hơn khi lớn hơn; bỏ model embedding / OCR. Model lập chỉ mục: ưu tiên loại đa ngôn ngữ (tiếng Việt).
+const isChatCand = m => m.type !== "embeddings" && !/embed|ocr|chandra/i.test(m.id);
+const embRank = m => /qwen3[-_]?embedding/i.test(m.id) ? 0 : /bge-m3|multilingual|\be5\b|e5-|gte-multi|jina-embeddings-v3|granite-embedding/i.test(m.id) ? 1
+  : /nomic/i.test(m.id) ? 2 : 3;
+function fitFor(kind, m) {
+  if (!m) return "";
+  if (kind === "chatOcr") return fitLevel(memGb(m, SG_OCR_CTX));
+  // tính chung với model đang chọn ở ô kia; model kia tự nó đã không vừa thì chỉ chấm model này (khỏi báo sai "quá lớn")
+  const partner = kind === "chatModel" ? memGb(byId($("chatEmbed").value), SG_EMB_CTX) : memGb(byId($("chatModel").value), SG_CHAT_CTX);
+  const own = memGb(m, kind === "chatModel" ? SG_CHAT_CTX : SG_EMB_CTX);
+  return fitLevel(own + (fitLevel(partner) === "no" ? 0 : partner));
+}
+const fitMark = f => f ? t({ok: "sgOk", tight: "sgTight", no: "sgNo"}[f]) : "";
+function suggestion() {
+  if (!vramGb() || !models.length) return null;
+  const lvl = (c, e) => fitLevel(memGb(c, SG_CHAT_CTX) + memGb(e, SG_EMB_CTX));
+  // Xếp model trả lời: model chữ trước model thị giác (-vl-, chuyên đọc ảnh), rồi theo số tham số đọc từ tên (27b, 120b, e4b…;
+  // không theo dung lượng file vì bản nén Q8 nặng gấp đôi Q4 mà không thông minh hơn), rồi theo dung lượng.
+  // Ollama báo sẵn số tham số (vd. "4.3B"); không có thì đọc từ tên (gemma3:4b, gpt-oss:20b, qwen3-vl:8b…)
+  const params = m => { const p = /([\d.]+)\s*([BM])/i.exec(m.params || ""); if (p) return +p[1] / (/m/i.test(p[2]) ? 1000 : 1);
+    const x = /(?:^|[-_/:])e?(\d+(?:\.\d+)?)b(?=$|[-_.:])/i.exec(m.id); return x ? +x[1] : (m.size_bytes || 0) / 0.6e9; };
+  const vl = m => /[-_]vl(?:[-_:]|$)/i.test(m.id) ? 1 : 0;
+  const chats = models.filter(isChatCand).sort((a, b) => vl(a) - vl(b) || params(b) - params(a) || (b.size_bytes || 0) - (a.size_bytes || 0));
+  const embs = models.filter(m => m.type === "embeddings").sort((a, b) => embRank(a) - embRank(b) || (b.size_bytes || 0) - (a.size_bytes || 0));
+  const bestWith = (e, ok) => chats.find(c => ok.includes(lvl(c, e)));
+  let chat = null, emb = null;
+  for (const ok of [["ok"], ["ok", "tight"]]) {
+    // Model lập chỉ mục tốt quan trọng cho tiếng Việt: chọn loại tốt nhất mà vẫn còn chỗ cho model trả lời
+    // ít nhất bằng nửa model trả lời lớn nhất có thể (nếu dùng model lập chỉ mục nhỏ nhất).
+    const top = Math.max(0, ...(embs.length ? embs : [null]).map(e => { const c = bestWith(e, ok); return c ? params(c) : 0; }));
+    for (const e of embs.length ? embs : [null]) {
+      const c = bestWith(e, ok);
+      if (c && params(c) >= top * 0.5) { chat = c; emb = e; break; }
+    }
+    if (chat) break;
+  }
+  const vis = models.filter(m => m.type === "vlm" && fitLevel(memGb(m, SG_OCR_CTX)) !== "no");
+  // OCR: model chuyên OCR nếu có, rồi model thị giác KHÔNG có chế độ suy nghĩ (bản -instruct; bản thinking chỉ suy nghĩ,
+  // không chép chữ) – Qwen-VL trước vì chép chữ tốt – rồi model thị giác bất kỳ.
+  const nothink = m => !(m.capabilities || []).includes("thinking");
+  const ocr = vis.find(m => /chandra|ocr/i.test(m.id)) || vis.find(m => nothink(m) && /qwen[\d.]*-?vl/i.test(m.id))
+    || vis.find(nothink) || null;
+  const tips = [];
+  if (!chat) tips.push(t("sgNeedChat"));
+  if (!emb || embRank(emb) > 1) tips.push(t("sgNeedEmb"));
+  if (!ocr) tips.push(t("sgNeedOcr"));
+  return {chat, emb, ocr, tips, vram: vramGb()};
+}
+function paintSugg() {
+  const s = suggestion(), box = $("chatSugg");
+  box.hidden = !s;
+  if (!s) return;
+  const same = (!s.chat || $("chatModel").value === s.chat.id) && (!s.emb || $("chatEmbed").value === s.emb.id) && (!s.ocr || $("chatOcr").value === s.ocr.id);
+  const row = (label, m, kind) => `<div class="sgrow"><span>${t(label)}</span><b>${m ? esc(m.id.split("/").pop()) : "–"}</b>${m
+    ? `<em>${gb(memGb(m, kind === "chatOcr" ? SG_OCR_CTX : kind === "chatEmbed" ? SG_EMB_CTX : SG_CHAT_CTX) * 1024)} GB</em>` : ""}</div>`;
+  const reindex = s.emb && chatState && chatState.embed_model && chatState.embed_model !== s.emb.id;
+  box.innerHTML = `<summary>${t("sgTitle", gb(s.vram * 1024))}</summary>
+    ${row("sgChat", s.chat, "chatModel")}${row("sgEmb", s.emb, "chatEmbed")}${row("sgOcr", s.ocr, "chatOcr")}
+    <div class="help">${t("sgNote")}</div>
+    ${s.tips.map(x => `<div class="sgtip">💡 ${esc(x)}</div>`).join("")}
+    ${same ? `<div class="sgsame">${t("sgSame")}</div>` : `<button id="sgApply" class="primary">${t("sgApply")}</button>`}
+    ${!same && reindex ? `<div class="help">${t("sgReindex")}</div>` : ""}`;
+  if (!box.dataset.init) { box.open = !same; box.dataset.init = "1"; }
+}
+$("chatSugg").addEventListener("click", e => {
+  if (e.target.id !== "sgApply") return;
+  const s = suggestion(); if (!s) return;
+  for (const [id, m] of [["chatModel", s.chat], ["chatEmbed", s.emb], ["chatOcr", s.ocr]])
+    if (m) { $(id).value = m.id; store.set(id, m.id); }
+  fillChatModels(); paintDocs();
+});
+
+function fillChatModels() {
+  const opt = (m, kind) => `<option value="${esc(m.id)}">${esc(m.id)}${m.quantization ? ` (${esc(m.quantization)})` : ""}${m.state === "loaded" ? t("loaded") : ""}${fitMark(fitFor(kind, m))}</option>`;
+  const fill = (id, list, pick, html) => {
+    const el = $(id); if (document.activeElement === el) return;
+    const cur = el.value || store.get(id) || pick(list) || "";
+    el.innerHTML = html || list.map(m => opt(m, id)).join("");
+    if (list.some(m => m.id === cur)) el.value = cur;
+  };
+  // Model tên có "embed" (vd. Qwen3 VL Embedding bị LM Studio xếp là model thị giác) không dùng để trả lời được: đưa xuống cuối.
+  const chatList = models.filter(m => m.type !== "embeddings").sort((a, b) => /embed/i.test(a.id) - /embed/i.test(b.id));
+  fill("chatModel", chatList, l => (l.find(m => m.state === "loaded" && !/embed/i.test(m.id)) || l[0] || {}).id);
+  // Ô embedding liệt kê mọi model: nhóm dùng được ngay, rồi các model khác (model tên có "embed" lên đầu).
+  const emb = models.filter(m => m.type === "embeddings");
+  const other = models.filter(m => m.type !== "embeddings").sort((a, b) => /embed/i.test(b.id) - /embed/i.test(a.id));
+  const vis = models.filter(m => m.type === "vlm").sort((a, b) => /ocr/i.test(b.id) - /ocr/i.test(a.id));
+  const ocrEl = $("chatOcr");
+  if (document.activeElement !== ocrEl && models.length) {  // đợi có danh sách model rồi mới chọn mặc định
+    const saved = store.get("chatOcr");
+    const want = ocrEl.dataset.init ? ocrEl.value : (saved !== null ? saved
+      : ((vis.find(m => /chandra|ocr/i.test(m.id)) || vis.find(m => !(m.capabilities || []).includes("thinking") && /qwen[\d.]*-?vl/i.test(m.id))
+         || vis.find(m => !(m.capabilities || []).includes("thinking")) || {}).id || ""));
+    ocrEl.innerHTML = `<option value="">${esc(t("ocrNone"))}</option>` + vis.map(m => opt(m, "chatOcr")).join("");
+    ocrEl.value = vis.some(m => m.id === want) ? want : ""; ocrEl.dataset.init = "1";
+  }
+  fill("chatEmbed", [...emb, ...other],
+       () => (chatState && chatState.embed_model) || (emb.find(m => /qwen3-embedding|bge-m3|e5/i.test(m.id)) || emb[0] || {}).id,
+       (emb.length ? `<optgroup label="${esc(t("embedGroupOk"))}">${emb.map(m => opt(m, "chatEmbed")).join("")}</optgroup>` : "")
+       + (other.length ? `<optgroup label="${esc(t("embedGroupOther"))}">${other.map(m => opt(m, "chatEmbed")).join("")}</optgroup>` : ""));
+  paintSugg();
+}
+// đổi model trả lời thì nhãn vừa/không vừa của model lập chỉ mục đổi theo (và ngược lại): vẽ lại các ô chọn
+["chatModel", "chatEmbed", "chatOcr"].forEach(id => { $(id).onchange = () => { store.set(id, $(id).value); fillChatModels(); paintDocs(); }; });
+async function loadChatState() {
+  try { chatState = await api("/api/chat/state"); } catch (e) { return; }
+  fillChatModels(); paintDocs();
+  clearTimeout(chatTimer);
+  if (chatState.indexing.running) chatTimer = setTimeout(loadChatState, 700);
+}
+function paintDocs() {
+  const s = chatState; if (!s) return;
+  const ix = s.indexing, stale = s.files.filter(f => !f.indexed).length, em = models.find(m => m.id === $("chatEmbed").value);
+  const ready = !!em && em.type === "embeddings", embed = ready ? em.id : "";
+  $("embedWarn").hidden = !em || ready;
+  if (em && !ready) $("embedWarn").innerHTML = `<b>${t("embedWarnT")}</b>${esc(t("embedWarn", em.id))}`;
+  $("docsDir").innerText = t("docsDir", s.docs_dir, s.exts.join(" "));
+  $("docsBarWrap").hidden = !ix.running;
+  $("docsBar").style.width = (ix.total ? ix.done / ix.total * 100 : 0) + "%";
+  $("docsIndex").disabled = ix.running || !embed || !s.files.length || !!jobId;
+  $("docsCancel").hidden = !ix.running; $("docsCancel").disabled = !!ix.cancel;
+  $("chatOcr").disabled = $("chatEmbed").disabled = !!ix.running;
+  // 3 ô bước: 1 tiếp nhận · 2 lấy chữ (hoặc OCR) · 3–5 vector hóa và lưu
+  const at = ["scan", "read", "ocr", "embed"].indexOf(ix.stage), cur = at < 0 ? -1 : at === 0 ? 0 : at === 3 ? 2 : 1;
+  $("docsSteps").hidden = !ix.running;
+  $("docsSteps").innerHTML = ["stepScan", at === 2 ? "stepOcr" : "stepRead", "stepEmbed"]
+    .map((l, n) => `<span class="${n === cur ? "on" : n < cur ? "ok" : ""}">${n < cur ? "✓ " : ""}${t(l)}</span>`).join("");
+  const missing = s.files.filter(f => f.ocr_missing).length;
+  const st = $("docsStatus"); st.className = "help";
+  if (ix.running) st.textContent = ix.cancel ? t("stCancel") : ix.stage === "scan" ? t("stScan")
+    : t({read: "stRead", ocr: "stOcr", embed: "stEmbed"}[ix.stage] || "stRead", ix.done, ix.total, ix.file);
+  else if (ix.error) { st.textContent = tr(ix.error); st.className = "help err"; }
+  else if (!s.files.length) st.textContent = t("docsNone");
+  else if (!embed) st.textContent = em ? "" : t("docsNoEmbed");
+  else if (!s.chunks) st.textContent = t("docsNoIndex");
+  else if (s.embed_model !== embed) st.textContent = t("docsOtherModel", s.embed_model);
+  else if (stale) st.textContent = t("docsStale", stale);
+  else if (missing) { st.textContent = t("docsOcrMissing", missing); st.className = "help err"; }
+  else st.textContent = t("docsReady", s.files.length, s.chunks, s.embed_model);
+  let dir = null, html = "";
+  for (const f of s.files) {
+    const cut = f.path.lastIndexOf("/"), d = cut < 0 ? "" : f.path.slice(0, cut), depth = d ? d.split("/").length : 0;
+    if (d !== dir) { dir = d; if (d) html += `<div class="dir" style="padding-left:${(depth - 1) * 12}px">📁 ${esc(d)}</div>`; }
+    const bad = f.note || (f.indexed && f.ocr_missing), cls = bad ? "bad" : f.indexed ? "ok" : "new";
+    const tip = f.ocr_missing && f.indexed ? t("fOcrMissing", f.ocr_missing) : f.note ? (f.note === "empty" ? t("fEmpty") : f.note)
+      : f.indexed ? t("fIndexed", f.chunks) + (f.ocr_pages ? t("fOcr", f.ocr_pages) : "") : t("fNew");
+    html += `<div class="f" style="padding-left:${depth * 12}px" data-path="${esc(f.path)}" title="${esc(tip)}"><span class="${cls}">${bad ? "⚠" : f.indexed ? "✓" : "●"}</span><span class="n">${esc(f.path.slice(cut + 1))}</span><span class="muted">${f.kb} KB</span></div>`;
+  }
+  $("docsTree").innerHTML = html;
+}
+const openDoc = path => api("/api/chat/open", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path})}).catch(e => alert(e.message));
+$("docsOpen").onclick = () => openDoc("");
+$("docsTree").onclick = e => { const f = e.target.closest(".f"); if (f) openDoc(f.dataset.path); };
+$("docsIndex").onclick = async () => {
+  try { await api("/api/chat/index", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({embed_model: $("chatEmbed").value, ocr_model: $("chatOcr").value})}); }
+  catch (e) { alert(e.message); }
+  loadChatState();
+};
+$("docsCancel").onclick = async () => { $("docsCancel").disabled = true; try { await api("/api/chat/index/cancel", {method: "POST"}); } catch (e) {} loadChatState(); };
+let unloading = false;
+function paintLoaded() {
+  const on = models.filter(m => m.state === "loaded"), g = lastGpu;
+  const vram = g && g.vram_total_mb ? `${gb(g.vram_used_mb)} / ${gb(g.vram_total_mb)} GB` : "";
+  $("loadedInfo").textContent = unloading ? t("unloading")
+    : on.length ? t("loadedList", on.map(m => m.id.split("/").pop() + (m.size_bytes ? ` (${gb(m.size_bytes / 1048576)} GB)` : "")).join(", "), vram) + " " + t("unloadHint")
+    : t("loadedNone");
+  $("unloadBtn").disabled = unloading || chatBusy || !on.length || !!jobId || !lmUp;
+}
+$("unloadBtn").onclick = async () => {
+  unloading = true; paintLoaded();
+  try { await api("/api/ollama/unload", {method: "POST"}); } catch (e) { alert(e.message); }
+  unloading = false; await refreshStatus();
+};
+// Vị trí của 1 nguồn: "trang 3", "mục 2. Thủ tục xin nghỉ"...
+const locLabel = x => !x.loc ? t("locPart", x.i + 1) : t({page: "locPage", sheet: "locSheet", sec: "locSec"}[x.loc[0]], x.loc[1]);
+const srcLabel = x => x.kind === "web" ? `🌐 ${x.title || x.url} — ${(() => { try { return new URL(x.url).hostname; } catch (e) { return x.url; } })()}`
+                                      : `📄 ${x.doc} · ${locLabel(x)}`;
+const citedOf = m => { const out = []; (m.content || "").replace(/\[(\d+(?:\s*[,;]\s*\d+)*)\]/g, (_, g) => g.split(/[,;]/).forEach(n => { n = +n; if ((m.sources || []).some(x => x.n === n) && !out.includes(n)) out.push(n); })); return out; };
+
+// Biểu đồ SVG từ khối ```chart của AI: {type, title, labels, series: [{name, data}]}
+function chatChartSvg(c) {
+  const labels = (c.labels || []).map(String), series = (c.series || []).map(x => ({name: String(x.name || ""), data: (x.data || []).map(Number)}));
+  if (!labels.length || !series.length || series.some(x => x.data.some(v => !isFinite(v)))) throw new Error("bad chart");
+  const col = i => `var(--c${i % 4})`, W = 640, H = 320, cut = (x, n) => x.length > n ? x.slice(0, n - 1) + "…" : x;
+  let g = "";
+  if (c.type === "pie") {
+    const data = series[0].data, sum = data.reduce((a, v) => a + Math.max(v, 0), 0) || 1, cx = 170, cy = 160, r = 120;
+    let a0 = -Math.PI / 2;
+    data.forEach((v, i) => {
+      const a1 = a0 + Math.max(v, 0) / sum * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
+      g += data.length === 1 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col(i)}"/>`
+        : `<path d="M${cx},${cy} L${cx + r * Math.cos(a0)},${cy + r * Math.sin(a0)} A${r},${r} 0 ${big} 1 ${cx + r * Math.cos(a1)},${cy + r * Math.sin(a1)} Z" fill="${col(i)}" opacity="${1 - Math.floor(i / 4) * .3}" stroke="var(--bg2)" stroke-width="1.5"/>`;
+      g += `<rect x="330" y="${40 + i * 24}" width="12" height="12" fill="${col(i)}" opacity="${1 - Math.floor(i / 4) * .3}"/><text x="350" y="${51 + i * 24}" font-size="13" fill="currentColor">${esc(cut(labels[i] || "", 26))}: ${fmt(v)} (${Math.round(v / sum * 100)}%)</text>`;
+      a0 = a1;
+    });
+  } else {
+    const all = series.flatMap(x => x.data), top = Math.max(...all, 0) || 1, mag = Math.pow(10, Math.floor(Math.log10(top))), max = Math.ceil(top / mag) * mag;
+    const L = 64, R = 12, T = 14, B = 62, pw = W - L - R, ph = H - T - B, y = v => T + ph - Math.max(v, 0) / max * ph, n = labels.length, slot = pw / n;
+    for (let k = 0; k <= 4; k++) g += `<line x1="${L}" x2="${W - R}" y1="${y(max * k / 4)}" y2="${y(max * k / 4)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(max * k / 4) + 4}" font-size="11" text-anchor="end" fill="var(--muted)">${fmt(max * k / 4)}</text>`;
+    labels.forEach((lab, i) => { g += `<text x="${L + slot * (i + .5)}" y="${H - B + 16}" font-size="11" text-anchor="middle" fill="currentColor">${esc(cut(lab, Math.max(6, Math.floor(slot / 6.5))))}</text>`; });
+    series.forEach((x, si) => {
+      if (c.type === "line") {
+        g += `<polyline fill="none" stroke="${col(si)}" stroke-width="2.5" points="${x.data.map((v, i) => `${L + slot * (i + .5)},${y(v)}`).join(" ")}"/>`;
+        x.data.forEach((v, i) => { g += `<circle cx="${L + slot * (i + .5)}" cy="${y(v)}" r="3.5" fill="${col(si)}"><title>${esc(labels[i])}: ${fmt(v)}</title></circle>`; });
+      } else {
+        const bw = slot * .8 / series.length;
+        x.data.forEach((v, i) => {
+          const bx = L + slot * i + slot * .1 + bw * si;
+          g += `<rect x="${bx}" y="${y(v)}" width="${bw - 2}" height="${T + ph - y(v)}" fill="${col(si)}" rx="2"><title>${esc(labels[i])}: ${fmt(v)}</title></rect>`;
+          if (n * series.length <= 14) g += `<text x="${bx + bw / 2 - 1}" y="${y(v) - 4}" font-size="10" text-anchor="middle" fill="var(--muted)">${fmt(v)}</text>`;
+        });
+      }
+      if (series.length > 1 || x.name) g += `<rect x="${L + si * 150}" y="${H - 18}" width="12" height="12" fill="${col(si)}"/><text x="${L + 18 + si * 150}" y="${H - 8}" font-size="12" fill="currentColor">${esc(cut(x.name, 20))}</text>`;
+    });
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+}
+// Tách câu trả lời thành chữ / bảng / biểu đồ. Bảng và biểu đồ được nhớ lại trong m.blocks để nút "Xuất Excel" dùng.
+function renderAnswer(m, mi) {
+  m.blocks = [];
+  const cite = s => s.replace(/\[(\d+(?:\s*[,;]\s*\d+)*)\]/g, (all, g) => {
+    const ns = g.split(/[,;]/).map(Number);
+    return ns.every(n => (m.sources || []).some(x => x.n === n)) ? ns.map(n => `<button class="cite" data-m="${mi}" data-n="${n}">${n}</button>`).join("") : all;
+  });
+  const inline = s => cite(esc(s).replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>"));
+  const plain = s => s.replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*[,;]\s*\d+)*\]/g, "").trim();
+  const bar = (label) => `<div class="blockbar"><button data-m="${mi}" data-b="${m.blocks.length - 1}">⬇ ${t(label)}</button></div>`;
+  let html = "";
+  const text = part => {
+    const lines = part.split("\n");
+    for (let i = 0; i < lines.length;) {
+      if (/^\s*\|.*\|\s*$/.test(lines[i]) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+        const rows = [];
+        for (; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) {
+          if (rows.length === 1 && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i])) { rows.sep = true; continue; }
+          rows.push(lines[i].trim().slice(1, -1).split("|").map(c => c.trim()));
+        }
+        m.blocks.push({rows: rows.map(r => r.map(plain))});
+        html += `<div class="scroll"><table><tr>${rows[0].map(c => `<th>${inline(c)}</th>`).join("")}</tr>${rows.slice(1).map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</table></div>` + bar("toExcel");
+      } else {
+        let j = i; while (j < lines.length && !(/^\s*\|.*\|\s*$/.test(lines[j]) && j + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[j + 1]))) j++;
+        html += inline(lines.slice(i, j).join("\n")); i = j;
+      }
+    }
+  };
+  const re = /```(\w*)[ \t]*\n?([\s\S]*?)(```|$)/g;
+  let last = 0, mt;
+  while ((mt = re.exec(m.content))) {
+    text(m.content.slice(last, mt.index)); last = re.lastIndex;
+    const [, kind, body, close] = mt;
+    if (kind === "chart" || (kind === "json" && /"series"/.test(body))) {
+      if (!close) { html += `<div class="chartbox muted">${t("chartDrawing")}</div>`; continue; }
+      try {
+        const c = JSON.parse(body); const svg = chatChartSvg(c);
+        m.blocks.push({chart: c});
+        html += `<div class="chartbox">${c.title ? `<div class="ct">${esc(c.title)}</div>` : ""}${svg}</div>` + bar("toExcelChart");
+      } catch (e) { html += `<div class="chartbox err">${t("chartBad")}</div><pre>${esc(body)}</pre>`; }
+    } else html += `<pre>${esc(body)}</pre>`;
+    if (!close) break;
+  }
+  text(m.content.slice(last));
+  return html.trim();
+}
+function paintChat() {
+  paintLoaded();
+  const log = $("chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  log.innerHTML = chatMsgs.length ? chatMsgs.map((m, mi) => {
+    if (m.role === "user") return `<div class="msg user">${esc(m.content)}</div>`;
+    let meta = "";
+    if (m.sources && m.sources.length) {
+      const cited = citedOf(m), list = cited.length ? m.sources.filter(x => cited.includes(x.n)) : m.sources;
+      if (m.stats || cited.length) meta += `<div>${t(cited.length ? "srcCited" : "srcRead")}</div>` +
+        list.map(x => `<div class="srcrow" data-m="${mi}" data-n="${x.n}"><span class="cite">${x.n}</span><span class="where">${esc(srcLabel(x))}</span></div>`).join("");
+    } else if (m.chat && m.stats) meta += t("srcChat");
+    else if (m.sources && m.stats && (m.docs || m.web)) meta += t("srcNone");
+    if (m.stats) meta += `<div style="margin-top:4px">${t("chatStats", fmt(m.stats.seconds), fmt(m.stats.tps), fmt(m.ctx))}</div>`;
+    const body = m.error ? `<span class="err">${esc(tr(m.error))}</span>` : m.content ? renderAnswer(m, mi) : `<span class="st">${esc(tr(m.status || ""))}</span>`;
+    return `<div class="msg bot">${body}${meta ? `<div class="meta">${meta}</div>` : ""}</div>`;
+  }).join("") : `<div class="muted">${t("chatEmpty")}</div>`;
+  if (atEnd) log.scrollTop = log.scrollHeight;
+  $("chatSend").disabled = chatBusy || !lmUp || !!jobId || !!(chatState && chatState.indexing.running);
+  $("chatInput").placeholder = t("chatPlaceholder");
+}
+// Khung xem nguồn: hiện cả tài liệu, tô sáng đoạn được trích dẫn và các dòng trùng với câu trả lời.
+function markLines(text, answer) {
+  const aw = new Set(answer.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+  return text.split("\n").map(line => {
+    const ws = line.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [], lw = new Set(ws);
+    // Tô dòng khi phần lớn dòng nằm trong câu trả lời, hoặc phần lớn câu trả lời nằm trong dòng (câu trả lời ngắn hơn nguyên văn).
+    const inAns = ws.filter(w => aw.has(w)).length / (ws.length || 1), inLine = [...aw].filter(w => lw.has(w)).length / (aw.size || 1);
+    const hit = ws.length >= 4 && !/^\s*#/.test(line) && Math.max(inAns, inLine) >= 0.75;
+    return hit ? `<mark>${esc(line)}</mark>` : esc(line);
+  }).join("\n");
+}
+// Những câu trong câu trả lời có trích dẫn nguồn số n (không có thì lấy cả câu trả lời).
+const citeText = (m, n) => {
+  const parts = (m.content || "").split(/\n|(?<=[.!?])\s+/).filter(x => new RegExp("\\[[\\d,;\\s]*\\b" + n + "\\b[\\d,;\\s]*\\]").test(x));
+  return parts.length ? parts.join(" ") : (m.content || "");
+};
+let viewerSrc = null;
+async function openSource(mi, n) {
+  const m = chatMsgs[mi], x = m && (m.sources || []).find(s => s.n === n);
+  if (!x) return;
+  viewerSrc = x;
+  $("viewer").hidden = false;
+  $("viewerOpen").textContent = t(x.kind === "web" ? "viewOpenWeb" : "viewOpenFile");
+  $("viewerTabs").hidden = true;
+  if (x.kind === "web") {
+    $("viewerTitle").textContent = x.title || x.url;
+    $("viewerBody").innerHTML = `<div class="help" style="word-break:break-all">${esc(x.url)}</div><div class="vchunk hit main" style="margin-top:10px">${markLines(x.text || "", citeText(m, n))}</div>`;
+    return;
+  }
+  $("viewerTitle").textContent = x.doc;
+  // PDF và file ảnh: mở thẳng trang gốc (đúng trang AI đã dùng), có tab Văn bản để xem chữ đã trích
+  const paged = /\.(pdf|jpe?g|png|webp|bmp|tiff?)$/i.test(x.doc);
+  const cited = citedOf(m), used = m.sources.filter(s => s.kind === "doc" && s.doc === x.doc && (cited.includes(s.n) || s.n === n));
+  const hitPages = new Map();  // trang → những câu trả lời trích nguồn nằm ở trang đó
+  for (const s of used) {
+    const p = s.loc && s.loc[0] === "page" ? s.loc[1] : 1;
+    hitPages.set(p, ((hitPages.get(p) || "") + " " + citeText(m, s.n)).trim());
+  }
+  const first = x.loc && x.loc[0] === "page" ? x.loc[1] : 1;
+  viewer = {m, n, x, used, hitPages, page: first, pages: 0, mode: paged ? "page" : "text"};
+  $("viewerTabs").hidden = !paged;
+  showViewer();
+}
+let viewer = null;
+function showViewer() {
+  document.querySelectorAll("#viewerTabs button").forEach(b => b.classList.toggle("on", b.dataset.vt === viewer.mode));
+  return viewer.mode === "page" ? showPage(viewer.page) : showText();
+}
+async function showPage(p) {
+  const v = viewer, doc = v.x.doc;
+  v.page = p;
+  const hits = [...v.hitPages.keys()].sort((a, b) => a - b);
+  const bar = () => `<div class="pgbar"><button data-pg="${v.page - 1}"${v.page <= 1 ? " disabled" : ""}>‹</button>
+    <span>${t("pgPage")} <input type="number" id="pgIn" min="1" max="${v.pages || ""}" value="${v.page}"> ${v.pages ? t("pgOf", v.pages) : ""}</span>
+    <button data-pg="${v.page + 1}"${v.pages && v.page >= v.pages ? " disabled" : ""}>›</button>
+    <span class="muted">${t("pgHits")}</span>${hits.map(h => `<button class="hitpg${h === v.page ? " on" : ""}" data-pg="${h}">${h}</button>`).join("")}
+    <span class="muted pgnote" id="pgNote"></span></div>`;
+  $("viewerBody").innerHTML = bar() + `<div class="muted">${t("viewLoading")}</div>`;
+  try {
+    const answer = v.hitPages.get(p) || "";
+    const mk = await api("/api/chat/marks", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({path: doc, page: p, answer})});
+    if (viewer !== v || v.page !== p) return;  // người dùng đã chuyển trang khác
+    v.pages = mk.pages;
+    const boxes = mk.boxes.map(([x0, y0, x1, y1]) =>
+      `<div class="mk" style="left:${x0 * 100}%;top:${y0 * 100}%;width:${(x1 - x0) * 100}%;height:${(y1 - y0) * 100}%"></div>`).join("");
+    $("viewerBody").innerHTML = bar() + `<div class="pgwrap"><img id="pgImg" alt="" src="/api/chat/page?path=${encodeURIComponent(doc)}&page=${p}">${boxes}</div>`;
+    const note = !answer ? "" : mk.source === "ocr-nobox" ? t("pgNoBox") : !mk.boxes.length ? t("pgNoMark")
+      : t("pgMarks", mk.boxes.length) + (mk.source === "ocr" ? " · " + t("pgOcrNote") : "");
+    $("pgNote").textContent = note;
+    $("pgImg").onload = () => {  // cuộn tới chỗ tô vàng đầu tiên
+      const el = document.querySelector(".pgwrap .mk"), body = $("viewerBody");
+      body.scrollTop = el ? el.offsetTop + el.offsetParent.offsetTop - body.clientHeight / 3 : 0;
+    };
+  } catch (e) { $("viewerBody").innerHTML = bar() + `<div class="err">${esc(e.message)}</div>`; }
+}
+$("viewerBody").addEventListener("click", e => {
+  const b = e.target.closest("button[data-pg]");
+  if (b && !b.disabled && viewer) showPage(+b.dataset.pg);
+});
+$("viewerBody").addEventListener("change", e => {
+  if (e.target.id !== "pgIn" || !viewer) return;
+  const p = Math.round(+e.target.value);
+  if (p >= 1 && (!viewer.pages || p <= viewer.pages)) showPage(p); else e.target.value = viewer.page;
+});
+$("viewerTabs").onclick = e => {
+  const b = e.target.closest("button[data-vt]");
+  if (b && viewer && viewer.mode !== b.dataset.vt) { viewer.mode = b.dataset.vt; showViewer(); }
+};
+async function showText() {
+  const v = viewer, {m, n, x, used} = v;
+  $("viewerBody").innerHTML = `<div class="muted">${t("viewLoading")}</div>`;
+  try {
+    const d = await api("/api/chat/doc?path=" + encodeURIComponent(x.doc));
+    if (viewer !== v || v.mode !== "text") return;  // người dùng đã mở nguồn khác / đổi tab
+    const hits = new Map(used.map(s => [s.i, s.n]));
+    let prev = null;
+    $("viewerBody").innerHTML = d.chunks.map(c => {
+      const key = JSON.stringify(c.loc), head = c.loc && key !== prev ? `<div class="vloc">${esc(locLabel(c))}${c.ocr ? '<span class="ocr">OCR</span>' : ""}</div>` : "";
+      prev = key;
+      return head + `<div class="vchunk${hits.has(c.i) ? " hit" : ""}${c.i === x.i ? " main" : ""}" id="vc${c.i}">${hits.has(c.i) ? markLines(c.text, citeText(m, hits.get(c.i))) : esc(c.text)}</div>`;
+    }).join("");
+    const el = $("vc" + x.i); if (el) el.scrollIntoView({block: "center"});
+  } catch (e) { $("viewerBody").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+$("viewerClose").onclick = () => { $("viewer").hidden = true; };
+$("viewer").onclick = e => { if (e.target === $("viewer")) $("viewer").hidden = true; };
+$("viewerOpen").onclick = () => { if (!viewerSrc) return; if (viewerSrc.kind === "web") window.open(viewerSrc.url, "_blank", "noopener"); else openDoc(viewerSrc.doc); };
+async function exportBlock(mi, bi) {
+  const b = chatMsgs[mi] && chatMsgs[mi].blocks && chatMsgs[mi].blocks[bi];
+  if (!b) return;
+  try {
+    const r = await fetch("/api/chat/excel", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)});
+    if (!r.ok) throw new Error(tr((await r.json().catch(() => ({}))).detail || r.statusText));
+    const a = document.createElement("a"), d = new Date(), z = v => String(v).padStart(2, "0");
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = `${b.chart ? "bieu-do" : "bang"}-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { alert(e.message); }
+}
+$("chatLog").onclick = e => {
+  const c = e.target.closest(".cite, .srcrow"), b = e.target.closest(".blockbar button");
+  if (b) exportBlock(+b.dataset.m, +b.dataset.b);
+  else if (c) { const el = c.closest("[data-n]"); openSource(+el.dataset.m, +el.dataset.n); }
+};
+async function chatSend() {
+  const text = $("chatInput").value.trim(), model = $("chatModel").value;
+  if (!text || chatBusy || !model) return;
+  const useDocs = $("chatDocs").checked, useWeb = $("chatWeb").checked;
+  chatMsgs.push({role: "user", content: text});
+  const bot = {role: "assistant", content: "", status: "", docs: useDocs, web: useWeb};
+  const messages = chatMsgs.map(m => ({role: m.role, content: m.content}));
+  chatMsgs.push(bot);
+  $("chatInput").value = ""; chatBusy = true; paintChat();
+  try {
+    const r = await fetch("/api/chat/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model, messages, use_docs: useDocs, use_web: useWeb})});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      const lines = buf.split("\n"); buf = lines.pop();
+      for (const line of lines) {
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "status") bot.status = ev.text;
+        else if (ev.type === "route") bot.chat = ev.mode === "chat";
+        else if (ev.type === "sources") { bot.sources = ev.sources; bot.ctx = ev.ctx; }
+        else if (ev.type === "text") bot.content += ev.text;
+        else if (ev.type === "done") bot.stats = ev;
+        else if (ev.type === "error") bot.error = ev.text;
+      }
+      paintChat();
+    }
+  } catch (e) { bot.error = e.message; }
+  if (!bot.content && !bot.error) bot.error = "Model trả lời rỗng";
+  chatBusy = false; paintChat(); $("chatInput").focus();
+  saveConv();
+}
+$("chatSend").onclick = chatSend;
+$("chatInput").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); } };
+
+// ----- Lịch sử hội thoại: lưu trên máy chủ (SQLite), tự lưu sau mỗi câu trả lời -----
+let convId = null, convTitle = "", convs = [], convTimer = null;
+const newConvId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+async function saveConv() {
+  if (!chatMsgs.length) return;
+  convId = convId || newConvId();
+  try {
+    const r = await api("/api/chat/conversations/" + convId, {method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({messages: chatMsgs})});
+    convTitle = r.title; store.set("chatConv", convId);
+  } catch (e) {}
+  paintConvName(); loadConvs();
+}
+async function loadConvs() {
+  try { convs = await api("/api/chat/conversations?q=" + encodeURIComponent($("convSearch").value.trim())); } catch (e) { convs = []; }
+  paintConvs();
+}
+function paintConvName() { $("convName").textContent = convId ? convTitle : t("convNew"); }
+function paintConvs() {
+  const q = $("convSearch").value.trim();
+  if (!convs.length) { $("convList").innerHTML = `<div class="convempty">${t(q ? "convNone" : "convEmpty")}</div>`; return; }
+  // nhóm theo ngày: hôm nay / hôm qua / 7 ngày qua / cũ hơn
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const start = day.getTime() / 1000, grp = u => u >= start ? "convToday" : u >= start - 86400 ? "convYesterday" : u >= start - 7 * 86400 ? "convWeek" : "convOlder";
+  const when = u => { const d = new Date(u * 1000), z = v => String(v).padStart(2, "0");
+    return u >= start ? `${z(d.getHours())}:${z(d.getMinutes())}` : `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()}`; };
+  let last = "", h = "";
+  for (const c of convs) {
+    const g = grp(c.updated);
+    if (g !== last) { h += `<div class="convgrp">${t(g)}</div>`; last = g; }
+    h += `<div class="conv${c.id === convId ? " on" : ""}" data-conv="${esc(c.id)}" title="${esc(c.title)}">
+      <div class="ct">${esc(c.title)}</div><div class="cm">${when(c.updated)} · ${t("convMsgs", c.n)}</div>
+      <div class="ca"><button data-act="rename" title="${t("convRename")}">✎</button><button class="del" data-act="delete" title="${t("convDelete")}">🗑</button></div></div>`;
+  }
+  $("convList").innerHTML = h;
+}
+async function openConv(id) {
+  if (chatBusy) { alert(t("convBusy")); return; }
+  try {
+    const c = await api("/api/chat/conversations/" + encodeURIComponent(id));
+    convId = c.id; convTitle = c.title; chatMsgs = c.messages; store.set("chatConv", convId);
+  } catch (e) { alert(e.message); return; }
+  $("viewer").hidden = true;
+  paintChat(); paintConvName(); paintConvs();
+  const log = $("chatLog"); log.scrollTop = log.scrollHeight;
+}
+function newConv() {
+  if (chatBusy) return;
+  convId = null; convTitle = ""; chatMsgs = []; store.set("chatConv", "");
+  paintChat(); paintConvName(); paintConvs(); $("chatInput").focus();
+}
+$("chatNew").onclick = newConv;
+$("convList").onclick = async e => {
+  const item = e.target.closest("[data-conv]");
+  if (!item) return;
+  const id = item.dataset.conv, act = e.target.closest("[data-act]");
+  const c = convs.find(x => x.id === id) || {title: ""};
+  if (!act) { if (id !== convId) openConv(id); return; }
+  if (act.dataset.act === "rename") {
+    const name = prompt(t("convRenameAsk"), c.title);
+    if (!name || !name.trim() || name.trim() === c.title) return;
+    try {
+      await api("/api/chat/conversations/" + encodeURIComponent(id), {method: "PATCH", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({title: name.trim()})});
+      if (id === convId) { convTitle = name.trim(); paintConvName(); }
+    } catch (err) { alert(err.message); }
+  } else if (act.dataset.act === "delete") {
+    if (!confirm(t("convDeleteAsk", c.title))) return;
+    try { await api("/api/chat/conversations/" + encodeURIComponent(id), {method: "DELETE"}); } catch (err) { alert(err.message); return; }
+    if (id === convId) newConv();
+  }
+  loadConvs();
+};
+$("convSearch").oninput = () => { clearTimeout(convTimer); convTimer = setTimeout(loadConvs, 250); };
+$("convToggle").onclick = () => {
+  const off = $("convPane").closest(".chatcard").classList.toggle("noconv");
+  store.set("convPane", off ? "0" : "1");
+};
+if (store.get("convPane") === "0") document.querySelector(".chatcard").classList.add("noconv");
+(async () => {  // mở lại cuộc trò chuyện đang dở lần trước
+  await loadConvs();
+  const last = store.get("chatConv");
+  if (last && convs.some(c => c.id === last)) openConv(last); else paintConvName();
+})();
+
+applyLang();
+if (store.get("view") === "chat") setView("chat"); else setView("bench");
+(async () => {
+  mods = await api("/api/modules");
+  fillModules();
+  renderForm();
+  await refreshStatus();
+  await loadHistory();
+  loadDirs();
+  setInterval(refreshStatus, 3000);  // chạy cả khi đang test để công suất GPU trên thanh đầu luôn cập nhật
+})();
+</script>
+</body>
+</html>

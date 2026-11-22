@@ -1,0 +1,24 @@
+[project]
+name = "aibench-spark"
+version = "0.1.0"
+description = "AI Bench Spark: benchmark GPU và chatbot tài liệu chạy AI qua Ollama, thiết kế cho Windows on ARM (RTX Spark)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+    "pillow>=10.1",
+    "openpyxl>=3.1",
+    "pypdf>=7.1.0",
+    "numpy>=2.4.6",
+    "ddgs>=9.16.1",
+    "pypdfium2>=5.15.2",
+    # Windows OCR (có sẵn trong Windows, chạy gốc trên ARM64): dò vị trí chữ trên trang scan để tô vàng
+    "winrt-runtime>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Globalization>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
+]
