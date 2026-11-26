@@ -20,6 +20,7 @@ import io
 import json
 import re
 import sqlite3
+import threading
 import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -41,6 +42,7 @@ VERSION = 3  # đổi cách cắt đoạn / cấu trúc dữ liệu thì tăng s
 MIN_PAGE_TEXT = 30  # trang PDF có ít hơn số ký tự này coi là trang scan, cần OCR
 OCR_SIDE = 1600  # cạnh dài nhất (px) của ảnh gửi đi OCR
 OCR_PARALLEL = 2  # số trang OCR cùng lúc (Ollama xử lý song song theo OLLAMA_NUM_PARALLEL)
+OCR_MAX_TOKENS = 6000  # chữ đọc ra tối đa mỗi trang (trang dày nhất đã gặp ~4.200 token)
 OCR_PROMPT = ("Chép lại toàn bộ chữ trong ảnh theo đúng thứ tự đọc. Bảng thì viết thành bảng Markdown. "
               "Chỉ trả về nội dung, không giải thích.")
 
@@ -50,6 +52,10 @@ Loc = list | None  # ["page", 3] | ["sheet", "Bảng giá"] | ["sec", "2. Thủ 
 # ----- bước 2: lấy chữ ----------------------------------------------------------------------------
 def _unxml(s: str) -> str:
     return s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&apos;", "'").replace("&amp;", "&")
+
+
+# pdfium không an toàn khi nhiều luồng dùng cùng lúc (lập chỉ mục + khung xem trang gốc): mọi lệnh pdfium đi qua khóa này.
+PDFIUM_LOCK = threading.RLock()
 
 
 def _jpeg(img: Any) -> bytes:
@@ -84,14 +90,17 @@ def read_parts(path: Path) -> list[dict[str, Any]]:
         if scans:  # trang không có lớp chữ → vẽ thành ảnh để OCR
             import pypdfium2 as pdfium
 
-            pdf = pdfium.PdfDocument(str(path))
-            try:
-                for part in out:
-                    if "page" in part:
-                        w, h = pdf[part["page"] - 1].get_size()
-                        part["image"] = _jpeg(pdf[part["page"] - 1].render(scale=min(3.0, OCR_SIDE / max(w, h, 1))).to_pil())
-            finally:
-                pdf.close()
+            for part in out:
+                if "page" in part:
+                    with PDFIUM_LOCK:  # mở lại mỗi trang để luồng xem trang gốc không phải chờ cả tài liệu lớn
+                        pdf = pdfium.PdfDocument(str(path))
+                        try:
+                            pg = pdf[part["page"] - 1]
+                            w, h = pg.get_size()
+                            img = pg.render(scale=min(3.0, OCR_SIDE / max(w, h, 1))).to_pil()
+                        finally:
+                            pdf.close()
+                    part["image"] = _jpeg(img)
         return out
     if ext == ".docx":
         with zipfile.ZipFile(path) as z:
@@ -162,11 +171,36 @@ def ocr_to_text(s: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _cut_loop(s: str) -> str:
+    """Model OCR đôi khi lặp mãi một mẩu (hay gặp nhất: một hàng bảng trống) tới khi hết số token.
+    Giữ tối đa 3 lần lặp liền nhau của cùng một khối dòng, hoặc của cùng một mẩu chữ trong một dòng."""
+    # lặp trong một dòng, vd. "| 产品批号 | 产品批号 | 产品批号 | …"
+    lines = [re.sub(r"(.{4,200}?)\1{3,}", r"\1\1\1", ln) for ln in s.split("\n")]
+    for size in range(1, 41):  # khối lặp dài 1–40 dòng
+        out: list[str] = []
+        i, cut = 0, False
+        while i < len(lines):
+            block = lines[i:i + size]
+            reps = 1
+            while lines[i + reps * size:i + (reps + 1) * size] == block and len(block) == size:
+                reps += 1
+            if reps > 3 and any(x.strip() for x in block):
+                out += block * 3
+                i += reps * size
+                cut = True
+            else:
+                out.append(lines[i])
+                i += 1
+        if cut:
+            lines = out
+    return "\n".join(lines)
+
+
 async def ocr_image(model: str, jpeg: bytes) -> str:
     from .ollama import KEEP_ALIVE, can_think, ctx_of
 
     payload = {"model": model, "stream": False, "keep_alive": KEEP_ALIVE,
-               "options": {"temperature": 0, "num_predict": 6000, "num_ctx": ctx_of(model)},
+               "options": {"temperature": 0, "num_predict": OCR_MAX_TOKENS, "num_ctx": ctx_of(model)},
                "messages": [{"role": "user", "content": OCR_PROMPT, "images": [base64.b64encode(jpeg).decode()]}]}
     if await can_think(model):
         payload["think"] = False  # chép chữ không cần suy nghĩ
@@ -174,12 +208,14 @@ async def ocr_image(model: str, jpeg: bytes) -> str:
         r = await http.post(f"{LM_URL}/api/chat", json=payload)
     if r.status_code != 200:
         raise RuntimeError(f"Ollama trả lỗi {r.status_code} khi OCR: {r.text[:300]}")
-    msg = r.json().get("message") or {}
+    data = r.json()
+    msg = data.get("message") or {}
     if not (msg.get("content") or "").strip() and msg.get("thinking"):
         # Bản "thinking" (vd. tag mặc định qwen3-vl:2b) bỏ qua think=false: chỉ suy nghĩ, không chép chữ ra.
         raise RuntimeError(f"Model OCR {model} chỉ suy nghĩ mà không chép chữ ra. Hãy dùng bản -instruct, "
                            f"vd. ollama pull qwen3-vl:2b-instruct (hoặc qwen3-vl:8b-instruct)")
-    return msg.get("content") or ""  # bản gốc model trả về; ocr_to_text() khi dùng
+    text = msg.get("content") or ""  # bản gốc model trả về; ocr_to_text() khi dùng
+    return _cut_loop(text) if data.get("done_reason") == "length" else text
 
 
 # ----- bước 3: cắt đoạn ---------------------------------------------------------------------------
@@ -331,9 +367,12 @@ class Cancelled(Exception):
 
 
 async def build(embed_model: str, ocr_model: str, progress: dict[str, Any],
-                prepare_ocr: Callable[[str], Awaitable[None]], prepare_embed: Callable[[str], Awaitable[None]]) -> Index:
+                prepare_ocr: Callable[[str], Awaitable[None]], prepare_embed: Callable[[str], Awaitable[None]],
+                only: str = "") -> Index:
     """Lập chỉ mục 5 bước. `progress` được cập nhật liên tục cho giao diện; progress["cancel"] = True để dừng
-    (phần đã làm được giữ lại: trang đã OCR, tài liệu đã lưu)."""
+    (phần đã làm được giữ lại: trang đã OCR, tài liệu đã lưu).
+    `only` = đường dẫn (tương đối) một tài liệu: chỉ làm lại tài liệu đó từ đầu: đọc lại, OCR lại (bỏ kết quả OCR
+    đã lưu của model OCR đang chọn), vector hóa và lưu lại; các tài liệu khác giữ nguyên."""
     def check() -> None:
         if progress.get("cancel"):
             raise Cancelled
@@ -345,18 +384,28 @@ async def build(embed_model: str, ocr_model: str, progress: dict[str, Any],
         old = Index.load()
         files = list_files()
         names = {rel(p) for p in files}
+        if only:
+            if only not in names:
+                raise RuntimeError(f"Không tìm thấy tài liệu {only} trong thư mục Tai_lieu")
+            if old.model and old.model != embed_model:
+                raise RuntimeError(f"Chỉ mục đang dùng model {old.model}. Đổi model lập chỉ mục thì phải bấm "
+                                   "\"Cập nhật chỉ mục\" cho toàn bộ tài liệu, không làm lại riêng một tài liệu được.")
         with db:
             for gone in set(old.files) - names:  # file đã bị xoá khỏi thư mục
                 db.execute("DELETE FROM docs WHERE path=?", (gone,))
                 db.execute("DELETE FROM chunks WHERE doc=?", (gone,))
-            if old.model != embed_model:  # đổi model embedding: mọi vector cũ không dùng được nữa
+            if old.model != embed_model and not only:  # đổi model embedding: mọi vector cũ không dùng được nữa
                 db.execute("DELETE FROM docs")
                 db.execute("DELETE FROM chunks")
                 db.execute("INSERT OR REPLACE INTO meta VALUES ('model', ?)", (embed_model,))
-        todo = files if old.model != embed_model else [p for p in files if rel(p) in set(old.stale())]
+            if only and not old.model:
+                db.execute("INSERT OR REPLACE INTO meta VALUES ('model', ?)", (embed_model,))
+        todo = [p for p in files if rel(p) == only] if only else files if old.model != embed_model else [p for p in files if rel(p) in set(old.stale())]
         # Tài liệu có trang scan chưa OCR được (lần trước chưa chọn model OCR) thì làm lại khi đã có model OCR.
-        if ocr_model:
+        if ocr_model and not only:
             todo += [p for p in files if p not in todo and (old.files.get(rel(p)) or {}).get("ocr_missing")]
+        # Tài liệu lần trước đọc lỗi thì lần này đọc lại (file không đổi nên bước trên không tự chọn lại).
+        todo += [] if only else [p for p in files if p not in todo and str((old.files.get(rel(p)) or {}).get("note") or "").startswith("error")]
 
         # ---- bước 2a: đọc chữ có sẵn, tìm các trang cần OCR
         progress.update(stage="read", done=0, total=len(todo))
@@ -365,11 +414,22 @@ async def build(embed_model: str, ocr_model: str, progress: dict[str, Any],
             check()
             progress["file"] = rel(p)
             d = {"path": p, "rel": rel(p), "stat": p.stat(), "note": "", "parts": []}
-            try:
-                d["sha1"] = await asyncio.to_thread(sha1, p)
-                d["parts"] = await asyncio.to_thread(read_parts, p)
-            except Exception as e:  # noqa: BLE001
-                d["note"], d["sha1"] = f"error: {e}", ""
+            for attempt in range(2):  # lỗi tạm thời (pdfium, file đang bị chép…) thì đọc lại một lần
+                try:
+                    d["sha1"] = await asyncio.to_thread(sha1, p)
+                    d["parts"] = await asyncio.to_thread(read_parts, p)
+                    d["note"] = ""
+                    if only and d["sha1"]:  # làm lại từ đầu: bỏ kết quả OCR và vị trí chữ đã lưu của tài liệu này
+                        with db:
+                            if ocr_model:
+                                db.execute("DELETE FROM ocr WHERE sha1=? AND model=?", (d["sha1"], ocr_model))
+                            try:
+                                db.execute("DELETE FROM layout WHERE sha1=?", (d["sha1"],))
+                            except sqlite3.OperationalError:
+                                pass  # chưa có bảng layout (chưa xem trang scan nào)
+                    break
+                except Exception as e:  # noqa: BLE001
+                    d["note"], d["sha1"], d["parts"] = f"error: {e}", "", []
             docs.append(d)
             progress["done"] += 1
 

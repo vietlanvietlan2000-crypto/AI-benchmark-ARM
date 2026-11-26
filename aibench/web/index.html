@@ -185,6 +185,15 @@
   /* Thanh lọc tự xuống dòng theo độ rộng thẻ: ô tìm rộng nhất, các ô chọn chia đều */
   .hfilter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
   .hfilter[hidden] { display: none; }
+  .cloudbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .cloudbar #cloudMsg { font-size: 12.5px; flex: 1 1 200px; }
+  .cloudbar #cloudMsg.err { color: var(--bad); }
+  .cloudset { margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); font-size: 13px; }
+  .cloudset[hidden] { display: none; }
+  .cloudset ol { margin: 6px 0; padding-left: 20px; } .cloudset li { margin: 4px 0; }
+  .cloudset .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .cloudset .row input { flex: 1 1 320px; margin: 0; }
+  .oncloud { margin-left: 6px; font-size: 12px; opacity: .8; }
   .hfilter input, .hfilter select { margin: 0; min-width: 0; width: auto; }
   .hfilter #hfText { flex: 2 1 240px; }
   .hfilter select, .hfilter #hfVga { flex: 1 1 160px; }
@@ -342,6 +351,10 @@
   .tree .f { display: flex; gap: 6px; cursor: pointer; padding: 1px 0; }
   .tree .f:hover { color: var(--accent); }
   .tree .f .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree .f .redo { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 4px; font-size: 13px; line-height: 1; visibility: hidden; }
+  .tree .f:hover .redo, .tree .f .redo.need { visibility: visible; }
+  .tree .f .redo:hover:not(:disabled) { color: var(--accent); }
+  .tree .f .redo:disabled { cursor: default; opacity: .35; }
   .tree .ok { color: var(--ok); } .tree .new { color: var(--warn); } .tree .bad { color: var(--bad); }
   h3 { font-size: 13px; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 </style>
@@ -401,6 +414,18 @@
       <h2 data-i18n="history"></h2>
       <div class="cmpbar"><span class="muted" data-i18n="cmpHint"></span>
         <button id="cmpClear" hidden data-i18n="cmpClear"></button><button class="primary" id="cmpGo" disabled></button></div>
+      <div class="cloudbar">
+        <button id="cloudPush" data-i18n="cloudPush"></button><button id="cloudPull" data-i18n="cloudPull"></button>
+        <button id="cloudSet" data-i18n="cloudSet"></button><span class="muted" id="cloudMsg"></span>
+      </div>
+      <div class="cloudset" id="cloudPanel" hidden>
+        <b data-i18n="cloudT"></b>
+        <ol><li id="cloudS1"></li><li id="cloudS2"></li><li id="cloudS3"></li></ol>
+        <div class="row"><button id="cloudCopy" data-i18n="cloudCopy"></button>
+          <a id="cloudFolder" target="_blank" rel="noopener" data-i18n="cloudFolder"></a></div>
+        <div class="row"><input id="cloudUrl" data-i18n-ph="cloudUrlPh"><button class="primary" id="cloudSave" data-i18n="cloudSave"></button></div>
+        <p class="muted" data-i18n="cloudNote"></p>
+      </div>
       <div class="hfilter" id="histFilter" hidden>
         <input type="search" id="hfText" data-i18n-ph="hfText">
         <select id="hfTest"></select>
@@ -562,6 +587,10 @@ const T = {
     docsOtherModel: m => `Chỉ mục hiện tại lập bằng ${m}. Bấm "Cập nhật chỉ mục" để lập lại bằng model đang chọn.`,
     docsNoIndex: "Chưa lập chỉ mục. Bấm \"Cập nhật chỉ mục\" để bắt đầu.",
     fIndexed: n => `đã lập chỉ mục (${n} đoạn)`, fNew: "mới hoặc đã sửa, chưa lập chỉ mục", fEmpty: "không đọc được chữ (có thể là bản scan)",
+    redoTip: "Đọc, OCR và lập chỉ mục lại riêng tài liệu này (khi tài liệu bị lỗi hoặc OCR sai)",
+    redoAsk: (f, o) => `Làm lại từ đầu tài liệu "${f}"?
+
+Đọc lại file, ${o ? "OCR lại các trang scan bằng " + o + " (bỏ kết quả OCR cũ)" : "không OCR trang scan (chưa chọn model OCR)"}, rồi vector hóa và lưu lại. Các tài liệu khác giữ nguyên.`,
     srcLabel: "Tài liệu đã đọc:", srcFull: "cả tài liệu", srcPart: "trích đoạn", srcNone: "Không tìm thấy tài liệu liên quan.", srcChat: "💬 Trò chuyện – câu này không cần tra tài liệu.",
     chatStats: (s, tps, ctx) => `${s} giây · ${tps} token/giây · ngữ cảnh ${ctx} token`,
     mdirLabel: "Thư mục model của Ollama", mdirOther: "Thư mục khác…", mdirDefault: "mặc định",
@@ -579,6 +608,20 @@ const T = {
     cpuBody: e => "Ollama đang chạy model hoàn toàn bằng CPU. Kiểm tra driver NVIDIA (lệnh nvidia-smi) và bản Ollama mới nhất có hỗ trợ GPU NVIDIA trên máy này (Windows ARM64 cần Ollama và driver hỗ trợ CUDA cho ARM).",
     cmpHint: "Tick tối đa 5 lần chạy để so sánh. Lần tick đầu tiên là mốc 100%.", cmpBtn: n => `So sánh hiệu năng (${n}/5)`,
     cmpClear: "Bỏ chọn", cmpFull: "Đã chọn đủ 5 kết quả", cmpTick: "Chọn để đưa vào bảng so sánh",
+    cloudPush: "☁ Đẩy lên cloud", cloudPull: "⤓ Lấy từ cloud", cloudSet: "⚙ Cài đặt cloud", cloudOn: "đã có trên Google Drive",
+    cloudPushAsk: (n, ticked) => `Đẩy ${n} kết quả ${ticked ? "đang tick" : "đang hiện trong danh sách (theo bộ lọc)"} lên Google Drive?\n\nKết quả đã có trên cloud và giống hệt thì bỏ qua.`,
+    cloudPullAsk: "Lấy các kết quả trên Google Drive về máy?\n\nChỉ chép về kết quả máy chưa có, không ghi đè kết quả trên máy.",
+    cloudPushing: (a, b, f) => `Đang đẩy lên cloud ${a}/${b}${f ? ": " + f : ""}`, cloudPulling: (a, b, f) => `Đang lấy từ cloud ${a}/${b}${f ? ": " + f : ""}`,
+    cloudPushed: (n, k) => `Đã đẩy ${n} kết quả lên Google Drive${k ? `, bỏ qua ${k} kết quả đã có` : ""}.`,
+    cloudPulled: (n, k) => n ? `Đã lấy ${n} kết quả từ Google Drive về máy${k ? ` (${k} kết quả máy đã có)` : ""}.` : `Không có kết quả mới trên Google Drive (${k} kết quả máy đã có).`,
+    cloudNone: "Chưa có kết quả nào để đẩy.", cloudOff: "Chưa cài đặt cloud.",
+    cloudT: "Lưu kết quả lên Google Drive",
+    cloudS1: "Bấm <b>Sao chép script</b>, mở <a href=\"https://script.google.com/home/projects/create\" target=\"_blank\" rel=\"noopener\">script.google.com</a> bằng tài khoản Google có quyền sửa thư mục, xóa nội dung có sẵn rồi dán vào, bấm Lưu.",
+    cloudS2: "Bấm <b>Triển khai → Tùy chọn triển khai mới</b>, chọn loại <b>Ứng dụng web</b>. Thực thi với tư cách: <b>Tôi</b>; Người có quyền truy cập: <b>Bất kỳ ai</b>. Bấm Triển khai và cho phép quyền Google Drive.",
+    cloudS3: "Chép <b>URL ứng dụng web</b> (kết thúc bằng /exec) dán vào ô dưới, bấm Lưu.",
+    cloudNote: "Script đã có sẵn khóa bí mật của máy này: không có khóa thì không ai đọc/ghi được dù biết link. Đổi máy thì cài lại script hoặc chép file cloud.json sang.",
+    cloudCopy: "Sao chép script", cloudCopied: "✓ Đã sao chép", cloudUrlPh: "https://script.google.com/macros/s/…/exec", cloudSave: "Lưu",
+    cloudOk: f => `✓ Đã kết nối thư mục Google Drive "${f}".`, cloudFolder: "Mở thư mục trên Google Drive",
     cmpTitle: "So sánh hiệu năng", cmpBack: "← Quay lại", cmpCrit: "Tiêu chí", cmpBase: "Mốc 100%", cmpSetBase: "Đặt làm mốc",
     cmpRemove: "Bỏ khỏi bảng so sánh", cmpSame: "tương đương",
     cmpNote: "Kết quả đầu tiên là mốc 100%; các kết quả sau được tính theo mốc đó.",
@@ -675,6 +718,10 @@ const T = {
     docsOtherModel: m => `The current index was built with ${m}. Click "Update index" to rebuild it with the selected model.`,
     docsNoIndex: "No index yet. Click \"Update index\" to start.",
     fIndexed: n => `indexed (${n} passages)`, fNew: "new or edited, not indexed yet", fEmpty: "no readable text (possibly a scan)",
+    redoTip: "Re-read, re-OCR and re-index only this document (when it failed or the OCR is wrong)",
+    redoAsk: (f, o) => `Redo document "${f}" from scratch?
+
+Re-read the file, ${o ? "re-OCR scanned pages with " + o + " (old OCR results are discarded)" : "skip scanned pages (no OCR model selected)"}, then embed and save it again. Other documents stay as they are.`,
     srcLabel: "Documents read:", srcFull: "whole document", srcPart: "excerpts", srcNone: "No relevant document found.", srcChat: "💬 Small talk – no document lookup needed.",
     chatStats: (s, tps, ctx) => `${s} s · ${tps} tokens/s · context ${ctx} tokens`,
     mdirLabel: "Ollama model folder", mdirOther: "Another folder…", mdirDefault: "default",
@@ -692,6 +739,20 @@ const T = {
     cpuBody: e => "Ollama is running the model entirely on the CPU. Check the NVIDIA driver (nvidia-smi) and that the latest Ollama supports the NVIDIA GPU on this PC (Windows ARM64 needs Ollama and a driver with CUDA for ARM).",
     cmpHint: "Tick up to 5 runs to compare. The first one you tick is the 100% baseline.", cmpBtn: n => `Compare performance (${n}/5)`,
     cmpClear: "Clear", cmpFull: "5 results already selected", cmpTick: "Select to add to the comparison",
+    cloudPush: "☁ Push to cloud", cloudPull: "⤓ Get from cloud", cloudSet: "⚙ Cloud settings", cloudOn: "on Google Drive",
+    cloudPushAsk: (n, ticked) => `Push ${n} result(s) ${ticked ? "that are ticked" : "shown in the list (current filter)"} to Google Drive?\n\nResults already on the cloud and identical are skipped.`,
+    cloudPullAsk: "Get the results on Google Drive onto this PC?\n\nOnly results this PC does not have are copied; local results are never overwritten.",
+    cloudPushing: (a, b, f) => `Pushing to cloud ${a}/${b}${f ? ": " + f : ""}`, cloudPulling: (a, b, f) => `Getting from cloud ${a}/${b}${f ? ": " + f : ""}`,
+    cloudPushed: (n, k) => `Pushed ${n} result(s) to Google Drive${k ? `, skipped ${k} already there` : ""}.`,
+    cloudPulled: (n, k) => n ? `Got ${n} result(s) from Google Drive${k ? ` (${k} already on this PC)` : ""}.` : `No new results on Google Drive (${k} already on this PC).`,
+    cloudNone: "No results to push.", cloudOff: "Cloud is not set up.",
+    cloudT: "Save results to Google Drive",
+    cloudS1: "Click <b>Copy script</b>, open <a href=\"https://script.google.com/home/projects/create\" target=\"_blank\" rel=\"noopener\">script.google.com</a> with a Google account that can edit the folder, delete the existing code, paste, and click Save.",
+    cloudS2: "Click <b>Deploy → New deployment</b>, type <b>Web app</b>. Execute as: <b>Me</b>; Who has access: <b>Anyone</b>. Click Deploy and allow Google Drive access.",
+    cloudS3: "Copy the <b>Web app URL</b> (ending in /exec), paste it below and click Save.",
+    cloudNote: "The script contains this PC's secret key: without it nobody can read or write, even with the link. On another PC, set the script up again or copy cloud.json over.",
+    cloudCopy: "Copy script", cloudCopied: "✓ Copied", cloudUrlPh: "https://script.google.com/macros/s/…/exec", cloudSave: "Save",
+    cloudOk: f => `✓ Connected to Google Drive folder "${f}".`, cloudFolder: "Open the folder on Google Drive",
     cmpTitle: "Performance comparison", cmpBack: "← Back", cmpCrit: "Metric", cmpBase: "Baseline 100%", cmpSetBase: "Set as baseline",
     cmpRemove: "Remove from comparison", cmpSame: "about the same",
     cmpNote: "The first result is the 100% baseline; the others are measured against it.",
@@ -822,6 +883,7 @@ const api = async (path, opts) => {
 const fmt = v => v == null ? "–" : typeof v === "number" ? v.toLocaleString(lang === "vi" ? "vi-VN" : "en-US") : v;
 
 let mods = [], models = [], lmUp = false, jobId = null, selected = null, imagesVer = 0;
+let cloud = null, cloudHave = new Set(), cloudTimer = null, cloudMsg = null;  // đồng bộ kết quả lên Google Drive
 let lastLog = [], lmStarting = false, connLost = false, lastGpu = null, lastEng = null, lastRam = null;
 const gb = mb => fmt(Math.round((mb || 0) / 102.4) / 10);
 // Nhãn ngắn: model chạy bằng GPU / GPU tràn VRAM / CPU, kèm vài con số.
@@ -1090,6 +1152,7 @@ let histList = [], histPage = 1;
 let histSize = (v => [10, 20, 50].includes(+v) ? +v : 10)(store.get("histSize"));
 async function loadHistory() {
   histList = await api("/api/results");
+  loadCloudFiles();
   fillHistFilter();
   renderHistory();
 }
@@ -1151,7 +1214,7 @@ function renderHistory() {
   $("history").innerHTML = `<div class="scroll"><table><tr><th></th>${t("cols").map(c => `<th>${c}</th>`).join("")}</tr>` +
     rows.map(r => `<tr class="click ${r.id === selected ? "sel" : ""}" data-id="${esc(r.id)}">
       <td><label class="pick"><input type="checkbox" data-cmp="${esc(r.id)}"><span class="ord"></span></label></td>
-      <td>${esc((r.started_at || "").replace("T", " "))}</td><td>${esc(tr(r.module_name))}</td><td>${modelHtml(r.model, r.quant)}</td><td>${esc(r.gpu || "")}</td>
+      <td>${esc((r.started_at || "").replace("T", " "))}${cloudHave.has(r.id + ".json") ? `<span class="oncloud" title="${esc(t("cloudOn"))}">☁</span>` : ""}</td><td>${esc(tr(r.module_name))}</td><td>${modelHtml(r.model, r.quant)}</td><td>${esc(r.gpu || "")}</td>
       <td>${r.summary.slice(0, 4).map(s => `${esc(tr(s.label))}: <b>${esc(fmt(s.value))}</b> ${esc(tr(s.unit || ""))}`).join(" · ")}</td></tr>`).join("") + `</table></div>` + (list.length > 10 || list.length < histList.length ? pagerHtml(histPage, pages, list.length, histList.length) : "");
   document.querySelectorAll("#history tr.click").forEach(tr => tr.onclick = e => { if (!e.target.closest(".pick")) showResult(tr.dataset.id); });
   syncCmp();
@@ -1196,6 +1259,68 @@ const HW = /^(VRAM đỉnh|GPU sử dụng|Nhiệt độ)/;
 const cmpGroup = s => ["Wh", "W", "tok/s/W"].includes(s.unit) ? "energy" : HW.test(s.label) ? "hw" : "perf";
 const cmpDir = s => NEUTRAL.test(s.label) ? 0 : (s.unit === "Wh" || s.unit === "W" || LOWER.has(s.label)) ? -1 : 1;
 const money = v => "≈ " + v.toLocaleString(lang === "vi" ? "vi-VN" : "en-US", {maximumFractionDigits: v < 100 ? 2 : 0}) + " " + t("moneyUnit");
+
+// ----- Cloud: đẩy / lấy kết quả qua Apps Script lên thư mục Google Drive -----
+function paintCloud() {
+  ["cloudS1", "cloudS2", "cloudS3"].forEach(id => { $(id).innerHTML = t(id); });  // có link và chữ đậm
+  const busy = !!(cloud && cloud.state.running);
+  $("cloudPush").disabled = $("cloudPull").disabled = busy || !(cloud && cloud.configured);
+  $("cloudSet").disabled = busy;
+  const m = $("cloudMsg"), st = cloud && cloud.state;
+  m.className = "muted";
+  if (busy) m.textContent = t(st.op === "push" ? "cloudPushing" : "cloudPulling", st.done, st.total, st.file);
+  else if (cloudMsg) { m.textContent = cloudMsg.text; if (cloudMsg.err) m.className = "err"; }
+  else m.textContent = cloud && !cloud.configured ? t("cloudOff") : "";
+}
+async function loadCloud() {
+  try { cloud = await api("/api/cloud"); } catch (e) { return; }
+  const st = cloud.state, wasBusy = !!cloudTimer;
+  clearTimeout(cloudTimer); cloudTimer = null;
+  if (st.running) cloudTimer = setTimeout(loadCloud, 800);
+  else if (wasBusy) {  // vừa xong
+    cloudMsg = st.error ? {text: tr(st.error), err: true}
+      : {text: st.op === "push" ? t("cloudPushed", st.sent, st.skipped) : t("cloudPulled", st.got, st.skipped)};
+    if (st.op === "pull" && st.got) loadHistory().catch(() => {}); else loadCloudFiles();
+  }
+  $("cloudFolder").href = cloud.folder_url;
+  if (document.activeElement !== $("cloudUrl")) $("cloudUrl").value = cloud.url;
+  paintCloud();
+}
+async function loadCloudFiles() {
+  if (!cloud || !cloud.configured) return;
+  try { cloudHave = new Set(Object.keys((await api("/api/cloud/files")).files)); renderHistory(); } catch (e) {}
+}
+async function cloudStart(path, body) {
+  cloudMsg = null;
+  try { await api(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
+  catch (e) { cloudMsg = {text: e.message, err: true}; paintCloud(); return; }
+  cloudTimer = -1; loadCloud();
+}
+$("cloudPush").onclick = () => {
+  const ids = cmp.length ? [...cmp] : histFiltered().map(r => r.id);
+  if (!ids.length) { cloudMsg = {text: t("cloudNone")}; return paintCloud(); }
+  if (confirm(t("cloudPushAsk", ids.length, !!cmp.length))) cloudStart("/api/cloud/push", {ids});
+};
+$("cloudPull").onclick = () => { if (confirm(t("cloudPullAsk"))) cloudStart("/api/cloud/pull"); };
+$("cloudSet").onclick = () => { $("cloudPanel").hidden = !$("cloudPanel").hidden; };
+$("cloudCopy").onclick = async () => {
+  try {
+    const text = await fetch("/api/cloud/script").then(r => r.text());
+    await navigator.clipboard.writeText(text);
+    $("cloudCopy").textContent = t("cloudCopied"); setTimeout(() => { $("cloudCopy").textContent = t("cloudCopy"); }, 2500);
+  } catch (e) { alert(e.message); }
+};
+$("cloudSave").onclick = async () => {
+  $("cloudSave").disabled = true; cloudMsg = null;
+  try {
+    const r = await api("/api/cloud", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({url: $("cloudUrl").value.trim()})});
+    cloudMsg = r.folder ? {text: t("cloudOk", r.folder)} : null;
+    if (r.folder) $("cloudPanel").hidden = true;
+  } catch (e) { cloudMsg = {text: e.message, err: true}; }
+  $("cloudSave").disabled = false;
+  await loadCloud(); loadCloudFiles();
+};
+loadCloud();
 
 function syncCmp() {
   document.querySelectorAll("#history input[data-cmp]").forEach(cb => {
@@ -1316,7 +1441,7 @@ function applyLang() {
   document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = t(el.dataset.i18nTitle); });
   $("langVi").classList.toggle("on", lang === "vi"); $("langEn").classList.toggle("on", lang === "en");
   $("logo").title = t("logoTip");
-  paintTools(); paintStatus(); paintDirs(); paintChat(); paintDocs(); paintConvs(); paintConvName();
+  paintTools(); paintStatus(); paintDirs(); paintChat(); paintDocs(); paintConvs(); paintConvName(); paintCloud();
   if (mods.length) {
     const keep = formParams();  // giữ lại những gì người dùng đã nhập
     fillModules(); renderForm();
@@ -1592,19 +1717,31 @@ function paintDocs() {
   else if (missing) { st.textContent = t("docsOcrMissing", missing); st.className = "help err"; }
   else st.textContent = t("docsReady", s.files.length, s.chunks, s.embed_model);
   let dir = null, html = "";
+  const redoOff = ix.running || !embed || !!jobId;
   for (const f of s.files) {
     const cut = f.path.lastIndexOf("/"), d = cut < 0 ? "" : f.path.slice(0, cut), depth = d ? d.split("/").length : 0;
     if (d !== dir) { dir = d; if (d) html += `<div class="dir" style="padding-left:${(depth - 1) * 12}px">📁 ${esc(d)}</div>`; }
     const bad = f.note || (f.indexed && f.ocr_missing), cls = bad ? "bad" : f.indexed ? "ok" : "new";
     const tip = f.ocr_missing && f.indexed ? t("fOcrMissing", f.ocr_missing) : f.note ? (f.note === "empty" ? t("fEmpty") : f.note)
       : f.indexed ? t("fIndexed", f.chunks) + (f.ocr_pages ? t("fOcr", f.ocr_pages) : "") : t("fNew");
-    html += `<div class="f" style="padding-left:${depth * 12}px" data-path="${esc(f.path)}" title="${esc(tip)}"><span class="${cls}">${bad ? "⚠" : f.indexed ? "✓" : "●"}</span><span class="n">${esc(f.path.slice(cut + 1))}</span><span class="muted">${f.kb} KB</span></div>`;
+    html += `<div class="f" style="padding-left:${depth * 12}px" data-path="${esc(f.path)}" title="${esc(tip)}"><span class="${cls}">${bad ? "⚠" : f.indexed ? "✓" : "●"}</span><span class="n">${esc(f.path.slice(cut + 1))}</span><span class="muted">${f.kb} KB</span><button class="redo${bad ? " need" : ""}" data-redo="${esc(f.path)}" title="${esc(t("redoTip"))}"${redoOff ? " disabled" : ""}>↻</button></div>`;
   }
   $("docsTree").innerHTML = html;
 }
 const openDoc = path => api("/api/chat/open", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path})}).catch(e => alert(e.message));
 $("docsOpen").onclick = () => openDoc("");
-$("docsTree").onclick = e => { const f = e.target.closest(".f"); if (f) openDoc(f.dataset.path); };
+$("docsTree").onclick = async e => {
+  const b = e.target.closest(".redo");
+  if (b) {
+    if (b.disabled) return;
+    const path = b.dataset.redo, ocr = $("chatOcr").value;
+    if (!confirm(t("redoAsk", path.split("/").pop(), ocr))) return;
+    try { await api("/api/chat/index", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({embed_model: $("chatEmbed").value, ocr_model: ocr, path})}); }
+    catch (err) { alert(err.message); }
+    return loadChatState();
+  }
+  const f = e.target.closest(".f"); if (f) openDoc(f.dataset.path);
+};
 $("docsIndex").onclick = async () => {
   try { await api("/api/chat/index", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({embed_model: $("chatEmbed").value, ocr_model: $("chatOcr").value})}); }
   catch (e) { alert(e.message); }

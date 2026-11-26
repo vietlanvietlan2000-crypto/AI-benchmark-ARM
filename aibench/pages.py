@@ -44,11 +44,12 @@ def page_count(p: Path) -> int:
         return 0
     import pypdfium2 as pdfium
 
-    pdf = pdfium.PdfDocument(str(p))
-    try:
-        return len(pdf)
-    finally:
-        pdf.close()
+    with rag.PDFIUM_LOCK:
+        pdf = pdfium.PdfDocument(str(p))
+        try:
+            return len(pdf)
+        finally:
+            pdf.close()
 
 
 @lru_cache(maxsize=24)
@@ -62,13 +63,14 @@ def _render(path: str, mtime: float, page: int) -> bytes:
     else:
         import pypdfium2 as pdfium
 
-        pdf = pdfium.PdfDocument(path)
-        try:
-            pg = pdf[page - 1]
-            w, h = pg.get_size()
-            img = pg.render(scale=min(3.0, SIDE / max(w, h, 1))).to_pil().convert("RGB")
-        finally:
-            pdf.close()
+        with rag.PDFIUM_LOCK:
+            pdf = pdfium.PdfDocument(path)
+            try:
+                pg = pdf[page - 1]
+                w, h = pg.get_size()
+                img = pg.render(scale=min(3.0, SIDE / max(w, h, 1))).to_pil().convert("RGB")
+            finally:
+                pdf.close()
     img.thumbnail((SIDE, SIDE))
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=85)
@@ -127,6 +129,11 @@ def _pick(lines: list[tuple[str, list[float]]], answer: str) -> list[list[float]
 
 def _pdf_lines(p: Path, page: int) -> list[tuple[str, list[float]]] | None:
     """Các dòng chữ của trang PDF kèm khung; None nếu trang không có lớp chữ (trang scan)."""
+    with rag.PDFIUM_LOCK:
+        return _pdf_lines_locked(p, page)
+
+
+def _pdf_lines_locked(p: Path, page: int) -> list[tuple[str, list[float]]] | None:
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(str(p))

@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from .core import GPU_INDEX, LM_URL, ROOT, list_results, load_result, modules, run_module
 from .engine import engine_status, ram_total_mb
 from .gpu import gpu_info
-from . import chat, history
+from . import chat, cloud, history
 from . import setup as st
 from .ollama import Ollama, ollama_exe
 
@@ -35,6 +35,7 @@ def _running() -> dict[str, Any] | None:
 chat.busy = _running
 app.include_router(chat.router)
 app.include_router(history.router)
+app.include_router(cloud.router)
 
 
 @app.get("/")

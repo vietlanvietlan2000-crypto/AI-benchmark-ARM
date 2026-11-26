@@ -26,7 +26,9 @@ _index: rag.Index | None = None
 
 CTX_WANT = 16384  # ngữ cảnh khi chatbot tự nạp model (đủ để đọc trọn tài liệu vài trang)
 EMBED_CTX = 4096  # ngữ cảnh của model embedding: mỗi đoạn tài liệu chỉ dài khoảng 1.200 ký tự
-OCR_CTX = 16384  # ngữ cảnh của model OCR: ảnh 1 trang ~2.200 token + chữ đọc ra, nhân số trang OCR cùng lúc
+# Ngữ cảnh của model OCR cho mỗi trang: ảnh (~2.200 token) + chữ đọc ra (tối đa OCR_MAX_TOKENS) + dự phòng.
+# Ollama cấp ngữ cảnh riêng cho từng yêu cầu chạy song song (OLLAMA_NUM_PARALLEL), nên không nhân số trang.
+OCR_CTX = 2200 + rag.OCR_MAX_TOKENS + 2048
 SYSTEM = (
     "Bạn là trợ lý tra cứu thân thiện, trả lời như một đồng nghiệp am hiểu tài liệu: tự nhiên, rõ ràng, đi thẳng vào ý chính. "
     "Thông tin thực tế (quy định, số liệu, thông số, quy trình…) chỉ lấy từ các NGUỒN THAM KHẢO được đánh số trong tin nhắn; "
@@ -109,6 +111,7 @@ async def build_index(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True}
     _check_idle()
     model, ocr_model = str(body.get("embed_model") or ""), str(body.get("ocr_model") or "")
+    only = str(body.get("path") or "")  # có đường dẫn: chỉ đọc, OCR và lập chỉ mục lại riêng tài liệu này
     if not model:
         raise HTTPException(400, "Chưa chọn model embedding")
     indexing.update(running=True, stage="scan", done=0, total=0, file="", error=None, cancel=False)
@@ -136,7 +139,7 @@ async def build_index(body: dict[str, Any]) -> dict[str, Any]:
     async def work() -> None:
         global _index
         try:
-            _index = await rag.build(model, ocr_model, indexing, prepare_ocr, prepare_embed)
+            _index = await rag.build(model, ocr_model, indexing, prepare_ocr, prepare_embed, only=only)
         except rag.Cancelled:
             indexing["error"] = "Đã dừng. Phần đã làm (trang đã OCR, tài liệu đã lưu) được giữ lại, bấm Cập nhật chỉ mục để làm tiếp."
         except Exception as e:  # noqa: BLE001

@@ -67,6 +67,26 @@ Kết quả mỗi lần chạy lưu thành file JSON trong `results/` và hiện
 Bài "Song song ×N" chỉ chạy song song thật khi Ollama cho phép nhiều yêu cầu cùng lúc (biến môi trường `OLLAMA_NUM_PARALLEL`);
 nếu không, các yêu cầu xếp hàng và tổng tốc độ không cao hơn chạy đơn.
 
+## Lưu kết quả lên Google Drive
+
+Kết quả vẫn nằm trong thư mục `results/` trên máy. Ở mục Lịch sử có thêm:
+
+- **☁ Đẩy lên cloud:** chép lên thư mục Google Drive các kết quả đang tick; không tick dòng nào thì chép mọi kết quả đang hiện
+  theo bộ lọc. Kết quả đã có trên cloud và giống hệt thì bỏ qua. Dòng đã có trên cloud mang dấu ☁.
+- **⤓ Lấy từ cloud:** chép về `results/` các kết quả trên cloud mà máy chưa có (không ghi đè kết quả trên máy).
+
+**Cài một lần** (bấm **⚙ Cài đặt cloud** để xem hướng dẫn ngay trên giao diện):
+
+1. Bấm **Sao chép script**, mở https://script.google.com bằng tài khoản Google có quyền sửa thư mục Drive, tạo dự án mới,
+   xóa nội dung có sẵn, dán script vào và bấm Lưu. Script (`aibench/cloud_script.gs`) đã điền sẵn thư mục Drive và khóa bí mật của máy.
+2. **Triển khai → Tùy chọn triển khai mới → Ứng dụng web**; Thực thi với tư cách: **Tôi**; Người có quyền truy cập: **Bất kỳ ai**.
+   Bấm Triển khai và cho phép quyền Google Drive.
+3. Chép **URL ứng dụng web** (`https://script.google.com/macros/s/…/exec`) dán vào ô trong AI Bench Spark, bấm **Lưu**.
+
+Link script và khóa lưu trong `cloud.json` (không đưa lên GitHub). Không có khóa thì không ai đọc/ghi được dù biết link.
+Máy khác muốn dùng chung thư mục: chép `cloud.json` sang, hoặc cài thêm một script cho máy đó.
+Thư mục Drive đặt trong `aibench/cloud.py` (`FOLDER_ID`).
+
 ## Điện năng tiêu thụ
 
 Mọi chức năng đều đo lượng điện GPU tiêu thụ (Wh), tính bằng cách cộng dồn công suất × thời gian từ các mẫu
@@ -177,6 +197,7 @@ Bấm **Chatbot** trên thanh đầu của giao diện.
   Trong lúc OCR, các model khác được gỡ để nhường bộ nhớ; OCR xong thì gỡ model OCR rồi mới nạp model embedding.
 - **Kết quả OCR được lưu lại** theo nội dung file: đổi model embedding hay lập lại chỉ mục không phải OCR lại.
 - Chọn "Không OCR" thì trang scan bị bỏ qua; tài liệu đó hiện dấu ⚠ kèm số trang chưa OCR.
+- Nút **↻** cạnh mỗi tài liệu: đọc, OCR và lập chỉ mục lại riêng tài liệu đó (khi bị lỗi hoặc OCR sai), các tài liệu khác giữ nguyên. Tài liệu đọc lỗi lần trước cũng được tự đọc lại khi bấm "Cập nhật chỉ mục".
 - Khi đang lập chỉ mục thì không chat và không chạy benchmark được (cùng dùng GPU).
 
 **Trò chuyện tự nhiên.** Trước khi tra cứu, chatbot phân loại tin nhắn: câu chào hỏi, cảm ơn, hỏi "bạn làm được gì", hay yêu cầu

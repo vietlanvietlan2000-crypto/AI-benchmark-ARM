@@ -5,6 +5,8 @@ __pycache__/
 
 # Dữ liệu riêng của từng máy: kết quả đo và file Excel xuất ra
 results/
+# Link Apps Script và khóa bí mật để đẩy kết quả lên Google Drive
+cloud.json
 Invoice_Ana/Ket qua/
 
 # Hóa đơn thật (có tên công ty, mã số thuế) không đưa lên GitHub; chỉ giữ bộ hóa đơn mẫu HoaDon_Mau_*.png
