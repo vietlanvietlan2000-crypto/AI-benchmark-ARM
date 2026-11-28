@@ -2,7 +2,7 @@
 name = "aibench-spark"
 version = "0.1.0"
 description = "AI Bench Spark: benchmark GPU và chatbot tài liệu chạy AI qua Ollama, thiết kế cho Windows on ARM (RTX Spark)"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
